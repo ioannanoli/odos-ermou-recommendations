@@ -1,0 +1,13 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+venv/
+.env
+.idea/
+.vscode/
+
+# Raw order exports can contain customer and location information.
+data/*.xlsx
+data/*.xls
+data/*.csv
