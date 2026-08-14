@@ -4,8 +4,10 @@ import pandas as pd
 
 from src.copurchase_recommender import CoPurchaseRecommender, build_copurchase_graph
 from src.evaluation import chronological_order_split, evaluate_recommender, ranking_metrics
+from src.error_analysis import leave_one_out_queries, qualitative_samples, softmax_cross_entropy
 from src.fp_growth import frequent_itemsets
 from src.product2vec_recommender import Product2VecRecommender
+from src.recommendation_engine import AdamicAdarRecommender, RecommendationEngine, filter_by_metadata
 from phase4_experiments import sample_configurations
 
 
@@ -70,6 +72,76 @@ class RecommenderTests(unittest.TestCase):
         second = sample_configurations(4, random_state=9)
         self.assertEqual(first, second)
         self.assertEqual(len({tuple(config.items()) for config in first}), 4)
+
+    def test_adamic_adar_predicts_missing_link(self):
+        import math
+        orders = pd.DataFrame({
+            "Order ID": [1, 1, 2, 2],
+            "SKU": ["A", "X", "B", "X"],
+        })
+        result = AdamicAdarRecommender().fit(orders=orders).recommend("A")
+        self.assertEqual(result.iloc[0]["recommended_sku"], "B")
+        self.assertAlmostEqual(result.iloc[0]["adamic_adar_score"], 1 / math.log(2))
+
+    def test_product2vec_recommends_for_cart(self):
+        model = Product2VecRecommender(
+            n_components=8, walk_length=5, walks_per_node=2,
+            negative_samples=2, epochs=2, random_state=7,
+        ).fit(self.orders)
+        result = model.recommend_cart(["A", "B"], top_n=1)
+        self.assertEqual(result.iloc[0]["recommended_sku"], "C")
+
+    def test_metadata_filter_requires_all_fields(self):
+        recommendations = pd.DataFrame({
+            "recommended_sku": ["A", "B"], "score": [1.0, 0.5]
+        })
+        catalog = pd.DataFrame({
+            "age": ["6+", "3+"], "category": ["LEGO | Building", "Dolls"]
+        }, index=["A", "B"])
+        result = filter_by_metadata(
+            recommendations, catalog, {"age": "6+", "category": "building"}
+        )
+        self.assertEqual(result["recommended_sku"].tolist(), ["A"])
+
+    def test_phase5_engine_blends_and_filters(self):
+        catalog = pd.DataFrame({"category": ["keep", "keep", "keep"]},
+                               index=["A", "B", "C"])
+        vector_model = Product2VecRecommender(
+            n_components=8, walk_length=5, walks_per_node=2,
+            negative_samples=2, epochs=2, random_state=7,
+        ).fit(self.orders, catalog)
+        link_model = AdamicAdarRecommender().fit(graph=vector_model.graph)
+        result = RecommendationEngine(vector_model, link_model, catalog).recommend(
+            ["A"], top_n=2, metadata_filters={"category": "keep"}
+        )
+        self.assertFalse(result.empty)
+        self.assertNotIn("A", result["recommended_sku"].tolist())
+        self.assertIn("recommendation_score", result.columns)
+
+    def test_softmax_cross_entropy(self):
+        import math
+        self.assertAlmostEqual(softmax_cross_entropy([0.0, 0.0, 0.0], 1), math.log(3))
+        self.assertLess(softmax_cross_entropy([0.0, 4.0, 0.0], 1), 0.1)
+
+    def test_leave_one_out_queries_are_reproducible(self):
+        first = leave_one_out_queries(self.orders, {"A", "B", "C"}, random_state=5)
+        second = leave_one_out_queries(self.orders, {"A", "B", "C"}, random_state=5)
+        self.assertEqual(first, second)
+        for query in first:
+            self.assertNotIn(query["target_sku"], query["cart_skus"])
+
+    def test_qualitative_samples_flag_metadata_mismatch(self):
+        outcomes = pd.DataFrame([{
+            "target_sku": "A", "top_prediction": "B", "hit_at_k": 0
+        }])
+        catalog = pd.DataFrame({
+            "Product Name": ["Building set", "Baby rattle"],
+            "Κατηγορίες προϊόντων": ["Building", "Baby"],
+            "Προϊόν Ηλικία": ["8+", "0+"],
+        }, index=["A", "B"])
+        sample = qualitative_samples(outcomes, catalog, sample_size=1)
+        self.assertTrue(bool(sample.iloc[0]["age_mismatch"]))
+        self.assertTrue(bool(sample.iloc[0]["category_mismatch"]))
 
 
 if __name__ == "__main__":

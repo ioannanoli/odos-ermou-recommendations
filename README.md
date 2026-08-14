@@ -1,10 +1,12 @@
 # Odos Ermou Toy Recommendation System
 
-This project implements the first four phases of a local recommendation
+This project implements the first six phases of a local recommendation
 pipeline: cleaning order data, mining frequent baskets, constructing a
 co-purchase graph, generating Node2vec random walks, training product
 embeddings with Skip-Gram negative sampling, and running chronological model
-evaluation with random hyperparameter search.
+evaluation with random hyperparameter search, and a cart recommendation engine
+combining embedding k-NN, Adamic–Adar link prediction, and metadata filters,
+followed by quantitative evaluation and qualitative error analysis.
 
 No API key or external service is required. All processing runs locally.
 
@@ -47,6 +49,12 @@ For a quick smoke test, use one trial and 50 evaluation queries:
 python phase4_experiments.py --trials 1 --max-queries 50
 ```
 
+Run Phase 6 leave-one-out evaluation and error analysis:
+
+```powershell
+python phase6_analysis.py
+```
+
 The default pipeline keeps every exported order status, including cancelled,
 pending, refunded, and failed orders. Rows without an order ID or usable SKU
 are removed.
@@ -61,22 +69,33 @@ OdosErmouReccomendations/
 |   |-- frequent_itemsets.csv
 |   |-- copurchase_recommendations.csv
 |   |-- product2vec_recommendations.csv
-|   `-- phase4/
-|       |-- split_summary.csv
-|       |-- baseline_metrics.csv
-|       |-- hyperparameter_results.csv
-|       `-- test_metrics.csv
+|   |-- adamic_adar_recommendations.csv
+|   |-- cart_recommendations.csv
+|   |-- phase4/
+|   |   |-- split_summary.csv
+|   |   |-- baseline_metrics.csv
+|   |   |-- hyperparameter_results.csv
+|   |   `-- test_metrics.csv
+|   `-- phase6/
+|       |-- summary_metrics.csv
+|       |-- prediction_outcomes.csv
+|       |-- segment_errors.csv
+|       `-- qualitative_samples.csv
 |-- src/
 |   |-- data_loader.py
 |   |-- evaluation.py
+|   |-- error_analysis.py
 |   |-- fp_growth.py
 |   |-- copurchase_recommender.py
-|   `-- product2vec_recommender.py
+|   |-- product2vec_recommender.py
+|   |-- model_config.py
+|   `-- recommendation_engine.py
 |-- tests/
 |   `-- test_recommenders.py
 |-- .gitignore
 |-- main.py
 |-- phase4_experiments.py
+|-- phase6_analysis.py
 |-- README.md
 `-- requirements.txt
 ```
@@ -86,7 +105,8 @@ OdosErmouReccomendations/
 ### `main.py`
 
 This is the executable entry point. Its constants select the input workbook,
-output folder, recommendation count, and minimum FP-Growth support.
+output folder, recommendation count, minimum FP-Growth support, and the
+Product2Vec configuration selected during Phase 4.
 
 - `_save_itemsets(orders, output_directory)` runs FP-Growth, converts each SKU
   tuple to a readable pipe-separated string, and writes
@@ -137,6 +157,41 @@ Contains the reusable Phase 4 splitting and metric logic.
   counts.
 - `split_summary(train, dev, test)` reports lines, orders, unique SKUs,
   multi-item baskets, and date boundaries for each split.
+
+### `phase6_analysis.py`
+
+This is the Phase 6 entry point.
+
+- `run_analysis(...)` fits the selected Product2Vec model and Phase 5 engine on
+  train+dev, hides one product from each eligible test basket, writes summary
+  metrics, complete outcomes, segment analysis, and qualitative samples.
+- `parse_args()` defines `--data`, `--output`, `--max-queries`, `--sample-size`,
+  and `--seed` command-line options.
+
+### `src/error_analysis.py`
+
+Contains reusable Phase 6 loss, evaluation, segmentation, and inspection logic.
+
+- `softmax_cross_entropy(logits, target_index)` computes stable categorical
+  cross-entropy using the log-sum-exp transformation.
+- `leave_one_out_queries(orders, known_skus, max_queries, random_state)` creates
+  one reproducible hidden target and remaining cart from each eligible order.
+- `_candidate_cross_entropy(recommendations, target_sku, epsilon)` calculates
+  softmax loss among returned candidates and applies a finite penalty when the
+  target is absent.
+- `evaluate_cart_engine(...)` calculates Precision@K, Recall@K, Hit Rate@K,
+  MRR@K, coverage, and candidate loss and returns every query outcome.
+- `segment_errors(outcomes)` groups quality by target popularity and remaining
+  cart size.
+- `_metadata_tokens(value)` normalizes metadata into comparable tokens.
+- `qualitative_samples(outcomes, product_catalog, sample_size, random_state)`
+  samples predictions, joins target/prediction names, categories, and ages, and
+  flags age or category mismatches for manual review.
+
+The workbook identifies products within an order but does not provide a
+separate timestamp for each order line. Phase 6 therefore evaluates basket
+completion, not a falsely inferred next-item sequence. Its cross-entropy is a
+candidate-set diagnostic and is not presented as full-catalog next-item loss.
 
 ### `src/data_loader.py`
 
@@ -212,6 +267,39 @@ Learns dense SKU vectors from the co-purchase graph.
   indices to SKUs, creates walks, trains embeddings, and returns the model.
 - `recommend(sku, top_n=10)` calculates cosine similarity through the normalized
   embedding matrix and returns the closest connected products.
+- `recommend_cart(cart_skus, top_n=10)` averages known cart embeddings,
+  normalizes the cart vector, and performs exact cosine k-nearest-neighbor
+  retrieval while excluding products already in the cart.
+
+### `src/model_config.py`
+
+- `SELECTED_PRODUCT2VEC_CONFIG` stores the configuration selected on the Phase
+  4 development set so `main.py` and Phase 6 use exactly the same settings.
+
+### `src/recommendation_engine.py`
+
+Contains Phase 5 retrieval, link prediction, metadata filtering, and blending.
+
+- `AdamicAdarRecommender.__init__()` creates an empty product graph.
+- `AdamicAdarRecommender.fit(orders=None, graph=None)` builds a graph from order
+  lines or copies an existing fitted graph.
+- `AdamicAdarRecommender.recommend(sku, top_n=10)` ranks products that are not
+  directly connected to the SKU but share graph neighbors with it.
+- `AdamicAdarRecommender.recommend_cart(cart_skus, top_n=10)` aggregates shared-
+  neighbor evidence from every product in a cart.
+- `_allowed_values(value)` converts one constraint or an iterable of constraints
+  to a common list representation.
+- `_metadata_matches(value, allowed)` performs case-insensitive whole-value and
+  delimiter-separated token matching.
+- `filter_by_metadata(recommendations, product_catalog, metadata_filters)` keeps
+  candidates matching every requested field and rejects unknown columns.
+- `RecommendationEngine.__init__(...)` stores the two models, catalog, and blend
+  weights. Defaults assign 75% to k-NN and 25% to Adamic–Adar.
+- `RecommendationEngine._normalize(frame, score_column)` min-max normalizes a
+  source score before blending.
+- `RecommendationEngine.recommend(cart_skus, top_n=10,
+  metadata_filters=None)` retrieves candidates, filters them, blends both
+  signals, and returns final cart recommendations.
 
 ### `tests/test_recommenders.py`
 
@@ -230,6 +318,16 @@ Defines a small deterministic three-order dataset and validates core behavior.
 - `test_evaluation_counts_eligible_queries()` checks basket-to-query conversion
   and aggregate evaluation.
 - `test_random_search_is_reproducible_and_unique()` checks seeded sampling.
+- `test_adamic_adar_predicts_missing_link()` verifies a two-hop missing link and
+  its exact score.
+- `test_product2vec_recommends_for_cart()` verifies cart-level k-NN retrieval.
+- `test_metadata_filter_requires_all_fields()` verifies multi-field filtering.
+- `test_phase5_engine_blends_and_filters()` checks the final blended output.
+- `test_softmax_cross_entropy()` verifies uniform and confident loss values.
+- `test_leave_one_out_queries_are_reproducible()` verifies deterministic target
+  hiding and prevents the target from remaining in the input cart.
+- `test_qualitative_samples_flag_metadata_mismatch()` checks age/category error
+  flags.
 - The final `unittest.main()` block allows the test file to run directly.
 
 ### Other files and directories
@@ -242,12 +340,23 @@ Defines a small deterministic three-order dataset and validates core behavior.
   recommendations and product metadata.
 - `outputs/product2vec_recommendations.csv` contains embedding-neighbor
   recommendations and product metadata.
+- `outputs/adamic_adar_recommendations.csv` contains predicted missing links and
+  common-neighbor evidence.
+- `outputs/cart_recommendations.csv` contains blended Phase 5 recommendations,
+  component scores, final scores, and product metadata.
 - `outputs/phase4/split_summary.csv` documents the chronological split.
 - `outputs/phase4/baseline_metrics.csv` contains train/dev co-purchase metrics.
 - `outputs/phase4/hyperparameter_results.csv` contains every sampled Product2Vec
   configuration, train/dev metrics, generalization gap, and diagnostic.
 - `outputs/phase4/test_metrics.csv` contains the final untouched-test results
   for co-purchase and the selected Product2Vec model.
+- `outputs/phase6/summary_metrics.csv` contains overall basket-completion
+  metrics and candidate loss.
+- `outputs/phase6/prediction_outcomes.csv` contains every evaluated cart, hidden
+  target, ranked predictions, rank, hit, loss, and analysis segments.
+- `outputs/phase6/segment_errors.csv` compares popularity and cart-size groups.
+- `outputs/phase6/qualitative_samples.csv` contains metadata-enriched random
+  examples and mismatch flags for manual inspection.
 - `requirements.txt` lists the four runtime packages. `openpyxl` reads the Excel
   file; `pandas` manages tables; `networkx` stores the graph; and `numpy` trains
   the embeddings.
@@ -271,15 +380,41 @@ product metadata.
 `product2vec_recommendations.csv` contains the base/recommended SKUs, embedding
 cosine-similarity score, and joined product metadata.
 
+`adamic_adar_recommendations.csv` contains link scores and shared-neighbor
+counts. `cart_recommendations.csv` contains the cart, recommended SKU,
+normalized k-NN and Adamic–Adar scores, final weighted score, and metadata.
+
+## Metadata-filtered cart example
+
+```python
+recommendations = engine.recommend(
+    ["SKU-1", "SKU-2"],
+    top_n=10,
+    metadata_filters={
+        "Προϊόν Ηλικία": ["6+", "7+"],
+        "Κατηγορίες προϊόντων": "LEGO",
+    },
+)
+```
+
+Values within one field are alternatives; separate fields must all match. Omit
+`metadata_filters` to rank the full known catalog.
+
 ## Changing the defaults
 
 - Change `TOP_N` in `main.py` to return more or fewer products.
 - Change `MIN_ITEMSET_SUPPORT` to make FP-Growth more or less selective.
+- Change `SELECTED_PRODUCT2VEC_CONFIG` only after a new Phase 4 experiment
+  identifies a better development-set configuration.
 - Pass `statuses` to `load_orders` if you later want to exclude particular
   order states.
 - Increase `walk_length`, `walks_per_node`, or `epochs` when constructing
   `Product2VecRecommender` for more training at the cost of runtime.
 - Adjust `p` and `q` to change whether random walks remain near the starting
   product or explore farther across the graph.
+- Change the two `RecommendationEngine` weights to alter the balance between
+  embedding similarity and missing-link evidence.
 - Change Phase 4 runtime with `--trials` and `--max-queries`. Increasing either
   gives a broader comparison but takes longer.
+- Change Phase 6 runtime with `--max-queries`; change the manual-review export
+  size with `--sample-size`.
