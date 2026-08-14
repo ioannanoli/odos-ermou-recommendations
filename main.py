@@ -98,7 +98,12 @@ def run_pipeline(data_path=DATA_PATH, output_directory=OUTPUT_DIRECTORY):
     print()
 
 
-if __name__ == "__main__":
+def main():
+    """Console entry point for the production recommendation pipeline."""
     # Prevent legacy Windows consoles from failing on Greek product text.
     sys.stdout.reconfigure(errors="backslashreplace")
     run_pipeline()
+
+
+if __name__ == "__main__":
+    main()

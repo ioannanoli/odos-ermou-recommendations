@@ -62,7 +62,12 @@ def parse_args():
     return parser.parse_args()
 
 
-if __name__ == "__main__":
+def main():
+    """Console entry point for Phase 6 analysis."""
     arguments = parse_args()
     run_analysis(arguments.data, arguments.output, arguments.max_queries,
                  arguments.sample_size, arguments.seed)
+
+
+if __name__ == "__main__":
+    main()

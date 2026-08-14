@@ -24,6 +24,17 @@ dependencies:
 python -m pip install -r requirements.txt
 ```
 
+Alternatively, install the project and its three console commands in editable
+mode:
+
+```powershell
+python -m pip install -e .
+```
+
+This provides `odos-recommend`, `odos-tune`, and `odos-analyze` as equivalents
+to `python main.py`, `python phase4_experiments.py`, and
+`python phase6_analysis.py`.
+
 Run the automated tests:
 
 ```powershell
@@ -82,6 +93,7 @@ OdosErmouReccomendations/
 |       |-- segment_errors.csv
 |       `-- qualitative_samples.csv
 |-- src/
+|   |-- __init__.py
 |   |-- data_loader.py
 |   |-- evaluation.py
 |   |-- error_analysis.py
@@ -91,11 +103,22 @@ OdosErmouReccomendations/
 |   |-- model_config.py
 |   `-- recommendation_engine.py
 |-- tests/
-|   `-- test_recommenders.py
+|   |-- test_recommenders.py
+|   `-- test_packaging.py
+|-- report/
+|   |-- README.md
+|   |-- 01_introduction.md
+|   |-- 02_data_collection.md
+|   |-- 03_data_processing.md
+|   |-- 04_methodology_and_algorithms.md
+|   |-- 05_experimental_setup.md
+|   |-- 06_results.md
+|   `-- 07_discussion.md
 |-- .gitignore
 |-- main.py
 |-- phase4_experiments.py
 |-- phase6_analysis.py
+|-- pyproject.toml
 |-- README.md
 `-- requirements.txt
 ```
@@ -119,6 +142,7 @@ Product2Vec configuration selected during Phase 4.
   export. Its optional arguments allow a different workbook or output folder.
 - The `if __name__ == "__main__"` block configures safe console output for Greek
   text and calls `run_pipeline()` only when the file is run directly.
+- `main()` is the package console entry point used by `odos-recommend`.
 
 ### `phase4_experiments.py`
 
@@ -138,6 +162,7 @@ for model selection.
   Hit Rate then MRR and Recall, refits on train+dev, and evaluates test once.
 - `parse_args()` defines `--data`, `--output`, `--trials`, `--max-queries`, and
   `--seed` command-line options.
+- `main()` is the package console entry point used by `odos-tune`.
 
 ### `src/evaluation.py`
 
@@ -167,6 +192,7 @@ This is the Phase 6 entry point.
   metrics, complete outcomes, segment analysis, and qualitative samples.
 - `parse_args()` defines `--data`, `--output`, `--max-queries`, `--sample-size`,
   and `--seed` command-line options.
+- `main()` is the package console entry point used by `odos-analyze`.
 
 ### `src/error_analysis.py`
 
@@ -276,6 +302,11 @@ Learns dense SKU vectors from the co-purchase graph.
 - `SELECTED_PRODUCT2VEC_CONFIG` stores the configuration selected on the Phase
   4 development set so `main.py` and Phase 6 use exactly the same settings.
 
+### `src/__init__.py`
+
+- Marks `src` as an installable Python package and defines package
+  `__version__ = "0.1.0"`.
+
 ### `src/recommendation_engine.py`
 
 Contains Phase 5 retrieval, link prediction, metadata filtering, and blending.
@@ -330,6 +361,22 @@ Defines a small deterministic three-order dataset and validates core behavior.
   flags.
 - The final `unittest.main()` block allows the test file to run directly.
 
+### `tests/test_packaging.py`
+
+- `PackagingTests.test_console_entry_points_resolve()` verifies all installed
+  command targets are callable.
+- `PackagingTests.test_pyproject_metadata_and_scripts()` checks the package name
+  and three declared commands.
+- `PackagingTests.test_analytical_report_has_all_sections()` ensures the full
+  seven-chapter report is present.
+
+### `report/`
+
+The [analytical report](report/README.md) organizes the project as Introduction,
+Data Collection, Data Processing, Methodology and Algorithms, Experimental
+Setup, Results and Quantitative Analysis, and Discussion. Reported numbers are
+copied from the versioned Phase 4 and Phase 6 output artifacts.
+
 ### Other files and directories
 
 - `data/Orders-Export-2026-June-07-2054.xlsx` is the source WooCommerce order
@@ -360,6 +407,8 @@ Defines a small deterministic three-order dataset and validates core behavior.
 - `requirements.txt` lists the four runtime packages. `openpyxl` reads the Excel
   file; `pandas` manages tables; `networkx` stores the graph; and `numpy` trains
   the embeddings.
+- `pyproject.toml` defines the installable package, Python requirement,
+  dependencies, version, build backend, and console commands.
 - `.gitignore` prevents Python caches, test caches, and local virtual
   environments from being tracked.
 - `README.md` is this setup and code reference.

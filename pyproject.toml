@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "odos-ermou-recommendations"
+version = "0.1.0"
+description = "Local market-basket, graph, and embedding recommendations for a toy shop"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "networkx",
+    "numpy",
+    "openpyxl",
+    "pandas",
+]
+
+[project.scripts]
+odos-recommend = "main:main"
+odos-tune = "phase4_experiments:main"
+odos-analyze = "phase6_analysis:main"
+
+[tool.setuptools]
+py-modules = ["main", "phase4_experiments", "phase6_analysis"]
+
+[tool.setuptools.packages.find]
+include = ["src", "src.*"]
