@@ -32,6 +32,7 @@ class Product2VecRecommender:
         self.embeddings = None
         self.graph = None
         self.product_catalog = None
+        self._cart_cache = {}
 
     def _next_node(self, previous, current, rng):
         neighbors = list(self.graph.neighbors(current))
@@ -133,9 +134,13 @@ class Product2VecRecommender:
         norms = np.linalg.norm(embeddings, axis=1, keepdims=True)
         return np.divide(embeddings, norms, out=np.zeros_like(embeddings), where=norms > 0)
 
-    def fit(self, orders, product_catalog=None):
-        self.graph = build_copurchase_graph(orders)
+    def fit(self, orders=None, product_catalog=None, graph=None):
+        """Fit from order lines or from a preconfigured co-purchase graph."""
+        if graph is None and orders is None:
+            raise ValueError("Provide either orders or graph.")
+        self.graph = graph.copy() if graph is not None else build_copurchase_graph(orders)
         self.product_catalog = product_catalog
+        self._cart_cache.clear()
         skus = sorted(self.graph.nodes)
         self.sku_to_index = {sku: index for index, sku in enumerate(skus)}
         self.index_to_sku = {index: sku for sku, index in self.sku_to_index.items()}
@@ -167,6 +172,9 @@ class Product2VecRecommender:
         if self.embeddings is None:
             return pd.DataFrame(columns=columns)
         cart = list(dict.fromkeys(str(sku) for sku in cart_skus))
+        cache_key = (tuple(cart), int(top_n))
+        if cache_key in self._cart_cache:
+            return self._cart_cache[cache_key].copy()
         known = [sku for sku in cart if sku in self.sku_to_index and self.graph.degree(sku) > 0]
         if not known:
             return pd.DataFrame(columns=columns)
@@ -190,4 +198,6 @@ class Product2VecRecommender:
                 })
             if len(rows) == top_n:
                 break
-        return pd.DataFrame(rows, columns=columns)
+        result = pd.DataFrame(rows, columns=columns)
+        self._cart_cache[cache_key] = result
+        return result.copy()

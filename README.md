@@ -6,7 +6,10 @@ co-purchase graph, generating Node2vec random walks, training product
 embeddings with Skip-Gram negative sampling, and running chronological model
 evaluation with random hyperparameter search, and a cart recommendation engine
 combining embedding k-NN, Adamic–Adar link prediction, and metadata filters,
-followed by quantitative evaluation and qualitative error analysis.
+followed by quantitative evaluation and qualitative error analysis. A stricter
+improvement pipeline now adds direct co-purchase blending, configurable graph
+weights and pruning, time decay, status-policy comparison, explicit metadata
+similarity, heterogeneous metadata walks, bootstrap intervals, and final plots.
 
 No API key or external service is required. All processing runs locally.
 
@@ -24,16 +27,68 @@ dependencies:
 python -m pip install -r requirements.txt
 ```
 
-Alternatively, install the project and its three console commands in editable
+Alternatively, install the project and its seven console commands in editable
 mode:
 
 ```powershell
 python -m pip install -e .
 ```
 
-This provides `odos-recommend`, `odos-tune`, and `odos-analyze` as equivalents
-to `python main.py`, `python phase4_experiments.py`, and
-`python phase6_analysis.py`.
+This provides `odos-recommend`, `odos-tune`, `odos-analyze`,
+`odos-metadata-transfer`, `odos-visualize`, `odos-improve`, and
+`odos-improvement-plots`.
+
+Run the optional metadata-to-complement transfer experiment:
+
+```powershell
+python metadata_transfer_experiment.py
+```
+
+Generate graph visualizations, optionally centered on a particular SKU:
+
+```powershell
+python graph_visualizations.py
+python graph_visualizations.py --center-sku IT16951
+```
+
+Run model selection on train/development data only:
+
+```powershell
+python experiment_runner.py development --trials 20
+```
+
+After reviewing and freezing `best_dev_configuration.json`, run the test stage
+once:
+
+```powershell
+python experiment_runner.py finalize
+```
+
+The finalize command refuses to run if `final_test_results.csv` already exists.
+Generate or refresh report plots without reevaluating any model:
+
+```powershell
+python visualization.py --center-sku IT16951
+```
+
+## Selected improvement result
+
+The frozen final model uses all statuses, an unpruned cosine graph with direct
+confidence ranking, six-month time decay, the original 48-dimensional
+Product2Vec settings, and lightly weighted heterogeneous metadata edges. Its
+top-level blend is 40% direct co-purchase, 30% Product2Vec, 30% metadata, and
+0% Adamic–Adar.
+
+| Test metric | Original P2V + AA | Selected final | Change |
+|---|---:|---:|---:|
+| Hit Rate / Recall@10 | 0.293 | 0.373 | +0.080 |
+| MRR@10 | 0.112 | 0.154 | +0.041 |
+| Coverage@10 | 0.068 | 0.076 | +0.008 |
+| Rare-product Hit Rate@10 | 0.108 | 0.162 | +0.054 |
+
+The test has only 75 eligible queries. The final Hit Rate@10 bootstrap interval
+is 0.267–0.480, so the point gain is encouraging but should be validated on a
+future order period.
 
 Run the automated tests:
 
@@ -87,11 +142,34 @@ OdosErmouReccomendations/
 |   |   |-- baseline_metrics.csv
 |   |   |-- hyperparameter_results.csv
 |   |   `-- test_metrics.csv
-|   `-- phase6/
-|       |-- summary_metrics.csv
-|       |-- prediction_outcomes.csv
-|       |-- segment_errors.csv
-|       `-- qualitative_samples.csv
+|   |-- phase6/
+|   |   |-- summary_metrics.csv
+|   |   |-- prediction_outcomes.csv
+|   |   |-- segment_errors.csv
+|   |   `-- qualitative_samples.csv
+|   |-- metadata_transfer/
+|   |   |-- development_weight_search.csv
+|   |   |-- summary_comparison.csv
+|   |   |-- segment_comparison.csv
+|   |   |-- prediction_comparison.csv
+|   |   |-- rare_seed_comparison.csv
+|   |   `-- improved_queries.csv
+|   |-- improvement_experiments/
+|   |   |-- baseline/
+|   |   |-- status_policy/
+|   |   |-- graph_weights/
+|   |   |-- time_decay/
+|   |   |-- product2vec_search/
+|   |   |-- blend_search/
+|   |   |-- heterogeneous_graph/
+|   |   |-- final/
+|   |   `-- plots/
+|   `-- visualizations/
+|       |-- graph_statistics.csv
+|       |-- graph_backbone.png
+|       |-- degree_distribution.png
+|       |-- top_copurchase_edges.png
+|       `-- sku_neighborhood_IT16951.png
 |-- src/
 |   |-- __init__.py
 |   |-- data_loader.py
@@ -101,6 +179,10 @@ OdosErmouReccomendations/
 |   |-- copurchase_recommender.py
 |   |-- product2vec_recommender.py
 |   |-- model_config.py
+|   |-- time_weighting.py
+|   |-- metadata_recommender.py
+|   |-- heterogeneous_graph.py
+|   |-- metadata_transfer_recommender.py
 |   `-- recommendation_engine.py
 |-- tests/
 |   |-- test_recommenders.py
@@ -118,6 +200,10 @@ OdosErmouReccomendations/
 |-- main.py
 |-- phase4_experiments.py
 |-- phase6_analysis.py
+|-- metadata_transfer_experiment.py
+|-- graph_visualizations.py
+|-- experiment_runner.py
+|-- visualization.py
 |-- pyproject.toml
 |-- README.md
 `-- requirements.txt
@@ -213,6 +299,9 @@ Contains reusable Phase 6 loss, evaluation, segmentation, and inspection logic.
 - `qualitative_samples(outcomes, product_catalog, sample_size, random_state)`
   samples predictions, joins target/prediction names, categories, and ages, and
   flags age or category mismatches for manual review.
+- `bootstrap_ranking_intervals(outcomes, n_bootstrap, confidence,
+  random_state)` reports query-bootstrap intervals for Hit Rate, Recall, and
+  MRR.
 
 The workbook identifies products within an order but does not provide a
 separate timestamp for each order line. Phase 6 therefore evaluates basket
@@ -261,16 +350,18 @@ Contains a dependency-free FP-Growth implementation.
 
 Builds and queries the normalized product graph.
 
-- `build_copurchase_graph(orders)` creates one node per SKU and one undirected
-  edge for each pair observed in the same order. Every edge stores its raw
-  co-purchase `count` and cosine-normalized `weight`. Each node stores the
-  number of orders containing that SKU.
-- `CoPurchaseRecommender.__init__()` creates an empty graph and catalog slot.
+- `build_copurchase_graph(orders, weighting, min_pair_count,
+  half_life_months, reference_date)` creates the configurable graph and stores
+  raw/weighted counts plus cosine, Jaccard, lift, and selected weights.
+- `CoPurchaseRecommender.__init__(...)` configures graph weighting, pruning,
+  decay, and direct ranking.
 - `CoPurchaseRecommender.fit(orders, product_catalog=None)` constructs the graph
   and returns the fitted model.
 - `CoPurchaseRecommender.recommend(sku, top_n=10)` ranks direct graph neighbors
   by normalized weight and also reports pair count, support, directional
   confidence, and Jaccard similarity.
+- `CoPurchaseRecommender.recommend_cart(...)` aggregates direct evidence across
+  every cart SKU and caches repeated experiment queries.
 
 ### `src/product2vec_recommender.py`
 
@@ -289,8 +380,8 @@ Learns dense SKU vectors from the co-purchase graph.
 - `_sigmoid(values)` computes a numerically stable logistic activation.
 - `_train_skipgram(walks, rng)` trains input and output embedding matrices in
   batches with negative sampling, combines them, and L2-normalizes the result.
-- `fit(orders, product_catalog=None)` constructs the graph, assigns matrix
-  indices to SKUs, creates walks, trains embeddings, and returns the model.
+- `fit(orders=None, product_catalog=None, graph=None)` constructs the default
+  graph or reuses a preconfigured graph before training embeddings.
 - `recommend(sku, top_n=10)` calculates cosine similarity through the normalized
   embedding matrix and returns the closest connected products.
 - `recommend_cart(cart_skus, top_n=10)` averages known cart embeddings,
@@ -331,6 +422,120 @@ Contains Phase 5 retrieval, link prediction, metadata filtering, and blending.
 - `RecommendationEngine.recommend(cart_skus, top_n=10,
   metadata_filters=None)` retrieves candidates, filters them, blends both
   signals, and returns final cart recommendations.
+- `HybridRecommendationEngine` generalizes this to independently normalized
+  co-purchase, Product2Vec, Adamic–Adar, and metadata scores with named weights.
+
+### `src/metadata_transfer_recommender.py`
+
+Implements the optional rare-product complement-transfer experiment.
+
+- `DEFAULT_FIELD_WEIGHTS` weights category, age, hero, brand, gender, and name
+  similarity.
+- `_metadata_tokens(value, product_name=False)` normalizes metadata and excludes
+  missing markers.
+- `MetadataTransferRecommender.__init__(...)` configures metadata neighbors,
+  similarity threshold, purchase-reliability smoothing, and substitute penalty.
+- `fit(orders=None, product_catalog=None, graph=None)` indexes metadata tokens
+  and fits or reuses the co-purchase graph.
+- `metadata_similarity(left_sku, right_sku)` calculates weighted field-wise
+  Jaccard similarity.
+- `_reliability(sku)` converts training order count into a smoothed reliability
+  score.
+- `similar_products(sku, top_n=None)` retrieves established metadata bridges
+  through an inverted token index.
+- `recommend(sku, top_n=10)` transfers bridge products' co-purchase complements
+  and combines them with direct evidence.
+- `recommend_cart(cart_skus, top_n=10)` aggregates transfer evidence across a
+  cart.
+- `MetadataEnhancedEngine` blends the production engine with normalized
+  transferred-complement evidence.
+
+### `metadata_transfer_experiment.py`
+
+- `_fit_components(...)` fits common graph, embedding, and transfer components.
+- `_evaluate_named(...)` evaluates one named engine consistently.
+- `_rare_hit_rate(...)` extracts the hidden-rare-target segment metric.
+- `evaluate_rare_seed_queries(...)` measures the intended use case where a rare
+  SKU is the observed input and its basket partners are relevant complements.
+- `run_experiment(...)` tunes transfer weight on development rare-seed metrics,
+  locks the selected weight, and compares base/enhanced engines on test.
+- `parse_args()` and `main()` provide the command-line interface.
+
+### `graph_visualizations.py`
+
+- `graph_statistics(graph)` reports graph size, density, components, isolates,
+  largest component, and degree statistics.
+- `strongest_edge_backbone(graph, max_edges)` selects the strongest observed
+  edges so the global network remains readable.
+- `neighborhood_subgraph(graph, center_sku, direct_limit, second_hop_limit)`
+  selects a bounded weighted two-hop ego network.
+- `_edge_widths(graph, minimum, maximum)` scales normalized edge weights into
+  visible line widths.
+- `plot_graph_backbone(...)`, `plot_sku_neighborhood(...)`,
+  `plot_degree_distribution(...)`, and `plot_top_edges(...)` create four PNG
+  charts using a non-interactive backend.
+- `generate_visualizations(...)` builds the graph and writes all charts plus
+  `graph_statistics.csv`.
+- `parse_args()` and `main()` expose `--data`, `--output`, and `--center-sku`.
+
+### `src/time_weighting.py`
+
+- `order_time_weights(orders, half_life_months, reference_date)` returns one
+  exponential-decay weight per order. Its default reference is the latest date
+  inside the supplied training frame, which prevents future-date leakage.
+
+### `src/metadata_recommender.py`
+
+- `metadata_tokens(value)` parses multi-valued metadata and discards missing or
+  `Unknown` markers.
+- `MetadataSimilarityRecommender.fit(product_catalog)` indexes category, brand,
+  age, hero, and gender tokens.
+- `similarity(left_sku, right_sku)` computes weighted field-wise Jaccard
+  similarity.
+- `recommend_cart(cart_skus, top_n)` ranks SKU candidates by their strongest
+  similarity to a product already in the cart.
+
+### `src/heterogeneous_graph.py`
+
+- `product_node(sku)` creates an unambiguous typed graph identifier.
+- `build_heterogeneous_graph(product_graph, product_catalog,
+  relationship_weights)` creates product, category, brand, age, and hero nodes,
+  excludes unknown metadata, and down-weights hubs by inverse square-root
+  degree.
+- `HeterogeneousProduct2VecRecommender.fit(...)` trains ordinary weighted walks
+  on the mixed graph.
+- `recommend_cart(...)` and `recommend(...)` perform exact cosine retrieval but
+  filter all output to real product SKUs.
+
+### `experiment_runner.py`
+
+- `inspect_status_policies(orders)` builds completed, successful-fulfilment,
+  broader-intent, and all-status policies from observed values.
+- `sample_product2vec_configurations(...)` returns 20 unique seeded candidates,
+  including the current baseline.
+- `blend_weight_grid(include_metadata)` creates valid coarse blends summing to
+  one.
+- `_fit_bundle(...)`, `_heterogeneous_bundle(...)`, `_engine(...)`, and
+  `_evaluate(...)` fit and evaluate consistent component sets while recording
+  complete experiment context.
+- `run_development_search(...)` runs status, graph, decay, Product2Vec, blend,
+  metadata, heterogeneous, and ablation comparisons using train/development
+  only, then freezes `best_dev_configuration.json`.
+- `run_final_evaluation(...)` refits the frozen winner on train+development,
+  evaluates test once, writes outcomes, segments, baseline comparison, and
+  bootstrap intervals, and refuses to overwrite an existing final result.
+- `parse_args()` and `main()` expose the `development` and `finalize` stages.
+
+### `visualization.py`
+
+- `plot_model_comparison(...)` creates the development ablation grouped bars.
+- `plot_final_baseline_comparison(...)` compares the original and frozen test
+  results.
+- `plot_segment_hit_rate(...)` plots popularity and cart-size segments.
+- `plot_hyperparameter_search(...)` plots all Product2Vec development trials.
+- `generate_experiment_visualizations(...)` writes the result plots plus a
+  filtered selected-graph backbone and ego graph without model reevaluation.
+- `parse_args()` and `main()` provide the plotting command.
 
 ### `tests/test_recommenders.py`
 
@@ -359,6 +564,13 @@ Defines a small deterministic three-order dataset and validates core behavior.
   hiding and prevents the target from remaining in the input cart.
 - `test_qualitative_samples_flag_metadata_mismatch()` checks age/category error
   flags.
+- `test_metadata_transfer_inherits_complement()` checks that an isolated rare
+  LEGO product inherits a storage-box complement through a similar established
+  LEGO product.
+- `test_metadata_enhanced_engine_handles_isolated_product()` verifies the
+  enhanced engine can serve that cold-start-style query.
+- `test_graph_visualization_selection_and_statistics()` verifies graph summary,
+  backbone, and bounded-neighborhood selection.
 - The final `unittest.main()` block allows the test file to run directly.
 
 ### `tests/test_packaging.py`
@@ -366,7 +578,7 @@ Defines a small deterministic three-order dataset and validates core behavior.
 - `PackagingTests.test_console_entry_points_resolve()` verifies all installed
   command targets are callable.
 - `PackagingTests.test_pyproject_metadata_and_scripts()` checks the package name
-  and three declared commands.
+  and five declared commands.
 - `PackagingTests.test_analytical_report_has_all_sections()` ensures the full
   seven-chapter report is present.
 
@@ -404,9 +616,21 @@ copied from the versioned Phase 4 and Phase 6 output artifacts.
 - `outputs/phase6/segment_errors.csv` compares popularity and cart-size groups.
 - `outputs/phase6/qualitative_samples.csv` contains metadata-enriched random
   examples and mismatch flags for manual inspection.
-- `requirements.txt` lists the four runtime packages. `openpyxl` reads the Excel
-  file; `pandas` manages tables; `networkx` stores the graph; and `numpy` trains
-  the embeddings.
+- `outputs/metadata_transfer/` contains development weight selection, overall
+  and segment comparisons, rare-seed results, all paired predictions, and
+  queries improved by transfer.
+- `outputs/visualizations/` contains the graph backbone, SKU neighborhood,
+  degree distribution, top-edge chart, and numerical graph statistics.
+- `outputs/improvement_experiments/` contains every development search table,
+  the frozen configuration, ablation and segment results, the one-time final
+  test outcomes, bootstrap intervals, baseline comparison, and final plots.
+- `outputs/improvement_experiments/final/best_dev_configuration.json` is the
+  complete frozen configuration selected without test feedback.
+- `outputs/improvement_experiments/final/final_test_results.csv` is also the
+  guard file that prevents accidental repeat test evaluation.
+- `requirements.txt` lists the runtime packages. `openpyxl` reads Excel,
+  `pandas` manages tables, `networkx` stores the graph, `numpy` trains the
+  embeddings, and `matplotlib` creates static visualizations.
 - `pyproject.toml` defines the installable package, Python requirement,
   dependencies, version, build backend, and console commands.
 - `.gitignore` prevents Python caches, test caches, and local virtual
@@ -467,3 +691,9 @@ Values within one field are alternatives; separate fields must all match. Omit
   gives a broader comparison but takes longer.
 - Change Phase 6 runtime with `--max-queries`; change the manual-review export
   size with `--sample-size`.
+- Change improvement-search breadth with `experiment_runner.py development
+  --trials N`; keep selection on development and do not alter the frozen model
+  in response to `final_test_results.csv`.
+- To run a genuinely new final evaluation, use a new future workbook and a new
+  output directory. Do not delete the existing guard file merely to rerun the
+  same test period.

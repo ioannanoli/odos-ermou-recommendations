@@ -17,12 +17,14 @@ class AdamicAdarRecommender:
 
     def __init__(self):
         self.graph = nx.Graph()
+        self._cart_cache = {}
 
     def fit(self, orders=None, graph=None):
         """Fit from order lines or reuse an already constructed graph."""
         if graph is None and orders is None:
             raise ValueError("Provide either orders or graph.")
         self.graph = graph.copy() if graph is not None else build_copurchase_graph(orders)
+        self._cart_cache.clear()
         return self
 
     def recommend(self, sku, top_n=10):
@@ -57,6 +59,9 @@ class AdamicAdarRecommender:
     def recommend_cart(self, cart_skus, top_n=10):
         """Aggregate Adamic–Adar evidence from every known product in a cart."""
         cart = list(dict.fromkeys(str(sku) for sku in cart_skus))
+        cache_key = (tuple(cart), int(top_n))
+        if cache_key in self._cart_cache:
+            return self._cart_cache[cache_key].copy()
         cart_set = set(cart)
         scores = {}
         evidence = {}
@@ -73,10 +78,12 @@ class AdamicAdarRecommender:
             "common_neighbors": evidence[sku],
         } for sku, score in scores.items()]
         columns = ["cart_skus", "recommended_sku", "adamic_adar_score", "common_neighbors"]
-        return (pd.DataFrame(rows, columns=columns)
+        result = (pd.DataFrame(rows, columns=columns)
                 .sort_values(["adamic_adar_score", "common_neighbors", "recommended_sku"],
                              ascending=[False, False, True])
                 .head(top_n).reset_index(drop=True))
+        self._cart_cache[cache_key] = result
+        return result.copy()
 
 
 def _allowed_values(value):
@@ -162,3 +169,84 @@ class RecommendationEngine:
         return (combined.sort_values(["recommendation_score", "recommended_sku"],
                                     ascending=[False, True])
                 .head(top_n).reset_index(drop=True))
+
+
+class HybridRecommendationEngine:
+    """Blend direct, embedding, link-prediction, and metadata signals."""
+
+    SCORE_COLUMNS = {
+        "copurchase": "copurchase_score",
+        "product2vec": "product2vec_score",
+        "adamic_adar": "adamic_adar_score",
+        "metadata": "metadata_score",
+    }
+
+    def __init__(self, copurchase_model, product2vec_model, adamic_adar_model,
+                 product_catalog, weights=None, metadata_model=None):
+        weights = dict(weights or {"product2vec": 0.75, "adamic_adar": 0.25})
+        unknown = set(weights).difference(self.SCORE_COLUMNS)
+        if unknown or any(value < 0 for value in weights.values()) or sum(weights.values()) <= 0:
+            raise ValueError(f"Invalid hybrid weights; supported signals: {sorted(self.SCORE_COLUMNS)}")
+        if weights.get("metadata", 0) > 0 and metadata_model is None:
+            raise ValueError("A metadata_model is required when metadata weight is positive.")
+        total = sum(weights.values())
+        self.weights = {name: weights.get(name, 0.0) / total for name in self.SCORE_COLUMNS}
+        self.copurchase_model = copurchase_model
+        self.product2vec_model = product2vec_model
+        self.adamic_adar_model = adamic_adar_model
+        self.metadata_model = metadata_model
+        self.product_catalog = product_catalog
+        self.graph = product2vec_model.graph
+
+    @staticmethod
+    def _normalized_scores(frame, score_column):
+        if frame is None or frame.empty:
+            return pd.DataFrame(columns=["recommended_sku", score_column])
+        result = frame[["recommended_sku", score_column]].copy()
+        result[score_column] = pd.to_numeric(result[score_column], errors="coerce").fillna(0.0)
+        minimum, maximum = result[score_column].min(), result[score_column].max()
+        if maximum > minimum:
+            result[score_column] = (result[score_column] - minimum) / (maximum - minimum)
+        else:
+            result[score_column] = 1.0 if maximum > 0 else 0.0
+        return result
+
+    def recommend(self, cart_skus, top_n=10, metadata_filters=None):
+        cart = list(dict.fromkeys(str(sku) for sku in cart_skus))
+        if not cart:
+            raise ValueError("cart_skus must contain at least one SKU.")
+        candidate_count = max(top_n * 10, 100)
+        models = {
+            "copurchase": self.copurchase_model,
+            "product2vec": self.product2vec_model,
+            "adamic_adar": self.adamic_adar_model,
+            "metadata": self.metadata_model,
+        }
+        combined = None
+        for signal, score_column in self.SCORE_COLUMNS.items():
+            model = models[signal]
+            if model is None or self.weights[signal] == 0:
+                continue
+            frame = self._normalized_scores(model.recommend_cart(cart, candidate_count), score_column)
+            combined = frame if combined is None else combined.merge(
+                frame, on="recommended_sku", how="outer"
+            )
+        output_columns = ["cart_skus", "recommended_sku", *self.SCORE_COLUMNS.values(),
+                          "recommendation_score"]
+        if combined is None or combined.empty:
+            return pd.DataFrame(columns=output_columns)
+        for score_column in self.SCORE_COLUMNS.values():
+            if score_column not in combined:
+                combined[score_column] = 0.0
+            combined[score_column] = pd.to_numeric(
+                combined[score_column], errors="coerce"
+            ).fillna(0.0)
+        combined = filter_by_metadata(combined, self.product_catalog, metadata_filters)
+        combined["recommendation_score"] = sum(
+            self.weights[signal] * combined[score_column]
+            for signal, score_column in self.SCORE_COLUMNS.items()
+        )
+        combined.insert(0, "cart_skus", " | ".join(cart))
+        return (combined.sort_values(["recommendation_score", "recommended_sku"],
+                                    ascending=[False, True])
+                .head(top_n).reset_index(drop=True)[output_columns])

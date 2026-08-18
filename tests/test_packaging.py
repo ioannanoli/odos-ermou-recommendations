@@ -5,8 +5,12 @@ import tomllib
 import unittest
 
 import main
+import metadata_transfer_experiment
+import graph_visualizations
+import experiment_runner
 import phase4_experiments
 import phase6_analysis
+import visualization
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -17,13 +21,19 @@ class PackagingTests(unittest.TestCase):
         self.assertTrue(callable(main.main))
         self.assertTrue(callable(phase4_experiments.main))
         self.assertTrue(callable(phase6_analysis.main))
+        self.assertTrue(callable(metadata_transfer_experiment.main))
+        self.assertTrue(callable(graph_visualizations.main))
+        self.assertTrue(callable(experiment_runner.main))
+        self.assertTrue(callable(visualization.main))
 
     def test_pyproject_metadata_and_scripts(self):
         with (ROOT / "pyproject.toml").open("rb") as stream:
             project = tomllib.load(stream)["project"]
         self.assertEqual(project["name"], "odos-ermou-recommendations")
         self.assertEqual(
-            set(project["scripts"]), {"odos-recommend", "odos-tune", "odos-analyze"}
+            set(project["scripts"]),
+            {"odos-recommend", "odos-tune", "odos-analyze", "odos-metadata-transfer",
+             "odos-visualize", "odos-improve", "odos-improvement-plots"},
         )
 
     def test_analytical_report_has_all_sections(self):

@@ -1,0 +1,70 @@
+{
+  "selection_split": "development",
+  "random_seed": 42,
+  "k": 10,
+  "status_policy": "all",
+  "allowed_statuses": null,
+  "graph": {
+    "weighting": "cosine",
+    "min_pair_count": 1,
+    "half_life_months": 6.0,
+    "ranking": "confidence"
+  },
+  "product2vec": {
+    "n_components": 48,
+    "walk_length": 8,
+    "walks_per_node": 2,
+    "window_size": 3,
+    "negative_samples": 2,
+    "epochs": 2,
+    "learning_rate": 0.05,
+    "p": 1.0,
+    "q": 1.0
+  },
+  "blend_weights": {
+    "copurchase": 0.4,
+    "product2vec": 0.3,
+    "adamic_adar": 0.0,
+    "metadata": 0.3
+  },
+  "metadata_field_weights": {
+    "Κατηγορίες προϊόντων": 0.35,
+    "Μάρκες": 0.2,
+    "Προϊόν Ηλικία": 0.25,
+    "Προϊόν Ήρωας": 0.15,
+    "Προϊόν Φύλλο": 0.05
+  },
+  "architecture": "heterogeneous",
+  "heterogeneous_relationship_weights": {
+    "copurchase": 1.0,
+    "category": 0.05,
+    "brand": 0.05,
+    "age": 0.05,
+    "hero": 0.05
+  },
+  "development_queries": 76,
+  "development_metrics": {
+    "precision_at_k": 0.0394736842105263,
+    "recall_at_k": 0.3947368421052631,
+    "hit_rate_at_k": 0.3947368421052631,
+    "mrr_at_k": 0.2551535087719299,
+    "catalog_coverage_at_k": 0.11027725661872
+  },
+  "experiment_record": {
+    "random_seed": 42,
+    "training_start": "2019-04-15 09:32:57",
+    "training_end": "2024-07-13 13:56:34",
+    "development_start": "2024-07-14 04:52:44",
+    "development_end": "2025-08-21 06:48:08",
+    "status_policy": "all",
+    "graph_weighting": "cosine",
+    "edge_threshold": 1,
+    "copurchase_ranking": "confidence",
+    "half_life_months": 6.0,
+    "product2vec_config": "{\"epochs\": 2, \"learning_rate\": 0.05, \"n_components\": 48, \"negative_samples\": 2, \"p\": 1.0, \"q\": 1.0, \"walk_length\": 8, \"walks_per_node\": 2, \"window_size\": 3}",
+    "blend_weights": "{\"adamic_adar\": 0.0, \"copurchase\": 0.4, \"metadata\": 0.3, \"product2vec\": 0.3}",
+    "metadata_weights": "{\"Κατηγορίες προϊόντων\": 0.35, \"Μάρκες\": 0.2, \"Προϊόν Ήρωας\": 0.15, \"Προϊόν Ηλικία\": 0.25, \"Προϊόν Φύλλο\": 0.05}",
+    "evaluation_k": 10,
+    "evaluated_queries": 76
+  }
+}

@@ -55,10 +55,14 @@ def _candidate_cross_entropy(recommendations, target_sku, epsilon=1e-12):
 
 
 def evaluate_cart_engine(engine, orders, train_orders, k=10, candidate_k=100,
-                         max_queries=250, random_state=42):
+                         max_queries=250, random_state=42, queries=None):
     """Evaluate hidden basket products and return summary plus query outcomes."""
-    known_skus = set(engine.product2vec_model.graph.nodes)
-    queries = leave_one_out_queries(orders, known_skus, max_queries, random_state)
+    graph = getattr(engine, "graph", None)
+    if graph is None:
+        graph = getattr(getattr(engine, "product2vec_model", None), "graph", None)
+    known_skus = set(graph.nodes) if graph is not None else set()
+    if queries is None:
+        queries = leave_one_out_queries(orders, known_skus, max_queries, random_state)
     popularity = train_orders.groupby("SKU")["Order ID"].nunique().to_dict()
     catalog_recommendations = set()
     rows = []
@@ -100,6 +104,41 @@ def evaluate_cart_engine(engine, orders, train_orders, k=10, candidate_k=100,
         "catalog_coverage_at_k": len(catalog_recommendations) / len(known_skus) if known_skus else 0.0,
     }])
     return summary, outcomes
+
+
+def bootstrap_ranking_intervals(outcomes, n_bootstrap=2000, confidence=0.95,
+                                random_state=42):
+    """Bootstrap query-level confidence intervals for the major ranking metrics."""
+    if n_bootstrap < 1:
+        raise ValueError("n_bootstrap must be positive.")
+    if not 0 < confidence < 1:
+        raise ValueError("confidence must be between zero and one.")
+    required = {"hit_at_k", "reciprocal_rank_at_k"}
+    missing = required.difference(outcomes.columns)
+    if missing:
+        raise ValueError(f"Outcome columns are missing: {sorted(missing)}")
+    if outcomes.empty:
+        return pd.DataFrame(columns=["metric", "point_estimate", "lower_95",
+                                     "upper_95", "bootstrap_samples"])
+    values = {
+        "hit_rate_at_k": outcomes["hit_at_k"].to_numpy(dtype=float),
+        "recall_at_k": outcomes["hit_at_k"].to_numpy(dtype=float),
+        "mrr_at_k": outcomes["reciprocal_rank_at_k"].to_numpy(dtype=float),
+    }
+    rng = np.random.default_rng(random_state)
+    indices = rng.integers(0, len(outcomes), size=(n_bootstrap, len(outcomes)))
+    alpha = (1.0 - confidence) / 2.0
+    rows = []
+    for metric, metric_values in values.items():
+        estimates = metric_values[indices].mean(axis=1)
+        rows.append({
+            "metric": metric,
+            "point_estimate": metric_values.mean(),
+            "lower_95": np.quantile(estimates, alpha),
+            "upper_95": np.quantile(estimates, 1.0 - alpha),
+            "bootstrap_samples": n_bootstrap,
+        })
+    return pd.DataFrame(rows)
 
 
 def segment_errors(outcomes):

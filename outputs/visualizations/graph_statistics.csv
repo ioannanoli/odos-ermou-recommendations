@@ -1,0 +1,10 @@
+﻿statistic,value
+nodes,6257.0
+edges,8841.0
+density,0.000451719138503495
+connected_components,2637.0
+isolated_nodes,2146.0
+largest_component_nodes,2636.0
+mean_degree,2.825954930477865
+median_degree,1.0
+maximum_degree,65.0

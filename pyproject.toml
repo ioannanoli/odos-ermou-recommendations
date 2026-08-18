@@ -9,6 +9,7 @@ description = "Local market-basket, graph, and embedding recommendations for a t
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
+    "matplotlib",
     "networkx",
     "numpy",
     "openpyxl",
@@ -19,9 +20,13 @@ dependencies = [
 odos-recommend = "main:main"
 odos-tune = "phase4_experiments:main"
 odos-analyze = "phase6_analysis:main"
+odos-metadata-transfer = "metadata_transfer_experiment:main"
+odos-visualize = "graph_visualizations:main"
+odos-improve = "experiment_runner:main"
+odos-improvement-plots = "visualization:main"
 
 [tool.setuptools]
-py-modules = ["main", "phase4_experiments", "phase6_analysis"]
+py-modules = ["main", "phase4_experiments", "phase6_analysis", "metadata_transfer_experiment", "graph_visualizations", "experiment_runner", "visualization"]
 
 [tool.setuptools.packages.find]
 include = ["src", "src.*"]

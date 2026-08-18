@@ -1,0 +1,43 @@
+﻿model,split,segment_type,segment,queries,hit_rate_at_k,mrr_at_k,mean_candidate_cross_entropy
+A Co-purchase,development,popularity,medium,18,0.05555555555555555,0.027777777777777776,24.830318499699256
+A Co-purchase,development,popularity,popular,17,0.4117647058823529,0.2241830065359477,15.735573711027211
+A Co-purchase,development,popularity,rare,41,0.36585365853658536,0.1719512195121951,18.156665541522653
+A Co-purchase,development,basket_size,large,5,0.6,0.35,11.785941361173773
+A Co-purchase,development,basket_size,medium,23,0.30434782608695654,0.09758454106280193,18.79538488258537
+A Co-purchase,development,basket_size,small,48,0.2708333333333333,0.15347222222222223,20.159379462065534
+B Product2Vec,development,popularity,medium,18,0.05555555555555555,0.05555555555555555,25.041100271948316
+B Product2Vec,development,popularity,popular,17,0.29411764705882354,0.12745098039215685,15.357930162071666
+B Product2Vec,development,popularity,rare,41,0.3170731707317073,0.17926829268292682,19.597283124423903
+B Product2Vec,development,basket_size,large,5,0.6,0.5,8.891881980651462
+B Product2Vec,development,basket_size,medium,23,0.21739130434782608,0.09347826086956522,21.52064440439467
+B Product2Vec,development,basket_size,small,48,0.22916666666666666,0.12222222222222223,20.330812386402773
+C Product2Vec + Adamic-Adar,development,popularity,medium,18,0.05555555555555555,0.05555555555555555,23.76630528640079
+C Product2Vec + Adamic-Adar,development,popularity,popular,17,0.17647058823529413,0.06862745098039215,15.383645473655122
+C Product2Vec + Adamic-Adar,development,popularity,rare,41,0.3170731707317073,0.17743902439024392,19.641654305699703
+C Product2Vec + Adamic-Adar,development,basket_size,large,5,0.6,0.5,8.944379755423755
+C Product2Vec + Adamic-Adar,development,basket_size,medium,23,0.21739130434782608,0.09347826086956522,21.546565580393565
+C Product2Vec + Adamic-Adar,development,basket_size,small,48,0.1875,0.09982638888888888,19.881883075309755
+D Co-purchase + Product2Vec + Adamic-Adar,development,popularity,medium,18,0.05555555555555555,0.05555555555555555,25.036105276664948
+D Co-purchase + Product2Vec + Adamic-Adar,development,popularity,popular,17,0.35294117647058826,0.2254901960784314,15.328533410299997
+D Co-purchase + Product2Vec + Adamic-Adar,development,popularity,rare,41,0.34146341463414637,0.1926829268292683,19.548523390953928
+D Co-purchase + Product2Vec + Adamic-Adar,development,basket_size,large,5,0.6,0.5,8.800974090973563
+D Co-purchase + Product2Vec + Adamic-Adar,development,basket_size,medium,23,0.21739130434782608,0.09565217391304348,21.484201952837278
+D Co-purchase + Product2Vec + Adamic-Adar,development,basket_size,small,48,0.2708333333333333,0.1673611111111111,20.303810554459478
+E D + metadata similarity,development,popularity,medium,18,0.05555555555555555,0.05555555555555555,17.344280122590806
+E D + metadata similarity,development,popularity,popular,17,0.47058823529411764,0.4411764705882353,11.080039218415738
+E D + metadata similarity,development,popularity,rare,41,0.36585365853658536,0.24451219512195121,14.473284751214031
+E D + metadata similarity,development,basket_size,large,5,0.6,0.5,8.760004735974347
+E D + metadata similarity,development,basket_size,medium,23,0.391304347826087,0.20978260869565218,14.406661787653693
+E D + metadata similarity,development,basket_size,small,48,0.25,0.2333333333333333,14.975190394241059
+F E + selected time decay,development,popularity,medium,18,0.1111111111111111,0.1111111111111111,16.037497939480037
+F E + selected time decay,development,popularity,popular,17,0.5294117647058824,0.4485294117647059,11.08252480161902
+F E + selected time decay,development,popularity,rare,41,0.3902439024390244,0.22743902439024388,13.361530022703624
+F E + selected time decay,development,basket_size,large,5,0.6,0.5,8.776984923257617
+F E + selected time decay,development,basket_size,medium,23,0.391304347826087,0.21086956521739128,13.417120991936857
+F E + selected time decay,development,basket_size,small,48,0.3125,0.24166666666666667,14.008789750795351
+G Heterogeneous Product2Vec,development,popularity,medium,18,0.16666666666666666,0.061111111111111116,14.783064230083259
+G Heterogeneous Product2Vec,development,popularity,popular,17,0.6470588235294118,0.46617647058823536,11.112337210515754
+G Heterogeneous Product2Vec,development,popularity,rare,41,0.3902439024390244,0.2528455284552846,13.931850804837548
+G Heterogeneous Product2Vec,development,basket_size,large,5,0.6,0.6,8.812879694546433
+G Heterogeneous Product2Vec,development,basket_size,medium,23,0.4782608695652174,0.213768115942029,13.422628885854325
+G Heterogeneous Product2Vec,development,basket_size,small,48,0.3333333333333333,0.23906249999999998,14.029706434817172

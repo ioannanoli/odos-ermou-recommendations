@@ -2,39 +2,55 @@
 
 ## Interpretation
 
-Graph embeddings broaden catalog coverage and slightly improve the probability
-of retrieving a relevant product, while direct co-purchase relationships remain
-valuable for placing successful recommendations early. The blended engine uses
-both signals and can introduce products supported by shared-neighbor evidence
-even when no direct co-purchase edge exists.
+The controlled experiment shows that direct confidence-ranked co-purchase
+evidence, recent-order emphasis, explicit metadata similarity, and a lightly
+weighted heterogeneous graph are complementary. The final top-level
+Adamic–Adar weight is zero, so it should not remain in the serving blend solely
+because it was part of the earlier architecture.
+
+Keeping all order statuses won on development data. In this export, cancelled
+and pending baskets appear to retain useful shopping-intent information rather
+than acting only as noise. Pair-count thresholds of two or three sharply hurt
+performance because the graph is already sparse. The expanded Product2Vec
+search did not beat the smaller original setup, showing that additional
+training cost does not automatically produce better recommendations.
+
+Metadata helped both coverage and rare-product retrieval. The heterogeneous
+gain came from low metadata relationship weights with hub correction, rather
+than allowing broad age or category nodes to dominate random walks.
 
 ## Main weaknesses
 
-- Rare products have insufficient graph evidence and low Hit Rate@10.
-- Most eligible test carts contain only one observed context product.
-- Cancelled, failed, and refunded orders may inject intent that differs from
-  completed purchases.
-- Cold-start SKUs unseen during fitting cannot be evaluated or embedded.
-- Metadata is incomplete and repeated export rows can disagree.
-- Candidate-set cross-entropy heavily penalizes absent targets but is not a
-  full-catalog calibrated probability or a trained next-item loss.
-- The test set contains only 75 eligible leave-one-out orders, and several
-  segment estimates have small samples.
+- The final test contains only 75 eligible queries, so confidence intervals are
+  wide and the popular segment has only three examples.
+- Most eligible carts contain one observed product; more context remains the
+  strongest predictor of success.
+- Products absent from all training orders still require a content-only or
+  business-rule fallback.
+- Metadata is incomplete, repeated rows can disagree, and broad labels may not
+  represent true substitutability.
+- All-status usefulness may change as operational processes or WooCommerce
+  status definitions change.
+- Offline basket completion does not measure clicks, conversion, margin,
+  availability, novelty, or customer satisfaction.
+- The same historical export has now supported several rounds of analysis;
+  future confidence should come from genuinely new orders.
 
 ## Recommended next work
 
-1. Compare completed-only training with the current all-status policy.
-2. Add content embeddings for cold-start products.
-3. Tune blend weights and metadata rules using development data only.
-4. Add inventory, price, and business constraints before serving results.
-5. Collect impression, click, add-to-cart, and purchase events for online A/B
-   evaluation.
-6. Retrain on a schedule and monitor coverage, drift, and segment performance.
+1. Keep the frozen configuration unchanged and evaluate it on a new future
+   period rather than tuning to the current test result.
+2. Add inventory, price, margin, and business constraints before serving.
+3. Add a metadata-only fallback for products absent from all training orders.
+4. Collect impressions, clicks, add-to-cart actions, and purchases for an
+   online A/B test.
+5. Retrain on a schedule and monitor coverage, drift, status mix, latency, and
+   popularity/cart-size segment performance.
 
 ## Conclusion
 
-The project delivers a reproducible local baseline from raw order export to
-recommendations, hyperparameter selection, untouched-test evaluation, and
-manual error samples. Results support a hybrid graph/embedding approach, while
-also showing that data sparsity and limited cart context—not simply model
-choice—are the dominant constraints.
+The frozen hybrid improved the one-time test point estimates for Hit Rate,
+Recall, MRR, coverage, and the rare-product segment without reducing large-cart
+Hit Rate. This supports the enriched hybrid as the next serving candidate,
+while the small sample and wide bootstrap intervals still require monitoring
+and future-period validation.
