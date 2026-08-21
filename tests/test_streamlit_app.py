@@ -47,10 +47,15 @@ class StreamlitAppTests(unittest.TestCase):
         self.assertEqual(result.iloc[0]["Rank"], 1)
         self.assertEqual(result.iloc[0]["recommended_sku"], "BOX")
 
+    def test_product_page_sections_are_deduplicated(self):
+        candidates = pd.DataFrame({"recommended_sku": ["A", "B", "C"]})
+        result = streamlit_app.exclude_recommendations(candidates, {"A"}, top_n=2)
+        self.assertEqual(result["recommended_sku"].tolist(), ["B", "C"])
+
     def test_query_signature_changes_with_inventory_and_filters(self):
-        base = streamlit_app.query_signature(["0012"], 10, {}, None)
+        base = streamlit_app.query_signature("0012", 10, {}, None)
         filtered = streamlit_app.query_signature(
-            ["0012"], 10, {"Μάρκες": ["Example"]}, {"BOX"}
+            "0012", 10, {"Μάρκες": ["Example"]}, {"BOX"}
         )
         self.assertNotEqual(base, filtered)
 

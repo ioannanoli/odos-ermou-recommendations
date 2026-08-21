@@ -129,16 +129,26 @@ class FinalRecommender:
     def recommend(self, cart_skus, top_n=10, available_skus: Iterable | None = None,
                   metadata_filters=None, enrich=True):
         """Recommend products, optionally restricting results to available SKUs."""
+        return self._recommend_with_engine(
+            self.engine, cart_skus, top_n, available_skus, metadata_filters, enrich
+        )
+
+    def _recommend_with_engine(self, engine, query_skus, top_n,
+                               available_skus=None, metadata_filters=None,
+                               enrich=True):
+        """Run one serving view and apply shared inventory/catalog handling."""
         if self.engine is None:
             raise RuntimeError("Fit or load the final recommender before querying it.")
         if top_n < 1:
             raise ValueError("top_n must be positive.")
-        cart = list(dict.fromkeys(str(sku).strip() for sku in cart_skus if str(sku).strip()))
-        if not cart:
-            raise ValueError("cart_skus must contain at least one usable SKU.")
+        query = list(dict.fromkeys(
+            str(sku).strip() for sku in query_skus if str(sku).strip()
+        ))
+        if not query:
+            raise ValueError("The query must contain at least one usable SKU.")
         requested = max(top_n * 10, 100) if available_skus is not None else top_n
-        recommendations = self.engine.recommend(
-            cart, top_n=requested, metadata_filters=metadata_filters
+        recommendations = engine.recommend(
+            query, top_n=requested, metadata_filters=metadata_filters
         )
         if available_skus is not None:
             allowed = {str(sku).strip() for sku in available_skus}
@@ -151,6 +161,40 @@ class FinalRecommender:
                 self.product_catalog, on="recommended_sku"
             )
         return recommendations
+
+    def _view_engine(self, weights):
+        """Create a ranking view over the already-fitted component models."""
+        if self.engine is None:
+            raise RuntimeError("Fit or load the final recommender before querying it.")
+        return HybridRecommendationEngine(
+            self.engine.copurchase_model,
+            self.engine.product2vec_model,
+            self.engine.adamic_adar_model,
+            self.product_catalog,
+            weights=weights,
+            metadata_model=self.engine.metadata_model,
+        )
+
+    def recommend_frequently_bought_together(
+        self, sku, top_n=10, available_skus: Iterable | None = None,
+        enrich=True,
+    ):
+        """Rank direct historical complements for a single product page."""
+        engine = self._view_engine({"copurchase": 1.0})
+        return self._recommend_with_engine(
+            engine, [sku], top_n, available_skus, metadata_filters=None,
+            enrich=enrich,
+        )
+
+    def recommend_similar(
+        self, sku, top_n=10, available_skus: Iterable | None = None,
+        metadata_filters=None, enrich=True,
+    ):
+        """Rank product substitutes using embeddings and structured content."""
+        engine = self._view_engine({"product2vec": 0.5, "metadata": 0.5})
+        return self._recommend_with_engine(
+            engine, [sku], top_n, available_skus, metadata_filters, enrich,
+        )
 
     def save(self, path):
         """Persist a locally trained model. Only load trusted pickle files."""

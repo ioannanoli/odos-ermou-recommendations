@@ -3,6 +3,10 @@
 This directory presents the recommendation project in a standard analytical
 report structure. Read the chapters in order:
 
+- [Complete submission draft](FULL_REPORT.md), following the requested table of
+  contents and including results, qualitative analysis, roles, time plan,
+  bibliography, and appendices.
+
 1. [Introduction](01_introduction.md)
 2. [Data collection](02_data_collection.md)
 3. [Data processing](03_data_processing.md)

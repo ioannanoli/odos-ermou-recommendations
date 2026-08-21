@@ -8,6 +8,12 @@ weighted heterogeneous graph are complementary. The final top-level
 Adamic–Adar weight is zero, so it should not remain in the serving blend solely
 because it was part of the earlier architecture.
 
+For deployment, the fitted signals are presented on the product page according
+to their meaning: direct co-purchase powers **Frequently bought together**, and
+Product2Vec plus metadata powers **Similar items**. This avoids mixing
+complements and substitutes in one unexplained list. It is a serving decision,
+not a new test result.
+
 Keeping all order statuses won on development data. In this export, cancelled
 and pending baskets appear to retain useful shopping-intent information rather
 than acting only as noise. Pair-count thresholds of two or three sharply hurt
@@ -33,6 +39,8 @@ than allowing broad age or category nodes to dominate random walks.
   status definitions change.
 - Offline basket completion does not measure clicks, conversion, margin,
   availability, novelty, or customer satisfaction.
+- The two product-page sections reuse components selected through the combined
+  hybrid experiment and do not yet have independent offline or online metrics.
 - The same historical export has now supported several rounds of analysis;
   future confidence should come from genuinely new orders.
 
@@ -40,12 +48,12 @@ than allowing broad age or category nodes to dominate random walks.
 
 1. Operate the persisted frozen model, retraining it on approved new order
    exports without changing its selected settings.
-2. Feed the serving command a current inventory list and add price, margin, and
+2. Feed the product page a current inventory list and add price, margin, and
    other business constraints.
 3. Evaluate on a new future period rather than tuning to the current test.
 4. Add a metadata-only fallback for products absent from all training orders.
-5. Collect impressions, clicks, add-to-cart actions, and purchases for an
-   online A/B test.
+5. Collect separate impressions, clicks, add-to-cart actions, and purchases for
+   Similar items and Frequently bought together in an online A/B test.
 6. Retrain on a schedule and monitor coverage, drift, status mix, latency, and
    popularity/cart-size segment performance.
 
@@ -53,6 +61,6 @@ than allowing broad age or category nodes to dominate random walks.
 
 The frozen hybrid improved the one-time test point estimates for Hit Rate,
 Recall, MRR, coverage, and the rare-product segment without reducing large-cart
-Hit Rate. This supports the enriched hybrid as the next serving candidate,
-while the small sample and wide bootstrap intervals still require monitoring
-and future-period validation.
+Hit Rate. Its components support the product-page prototype, while the small
+sample, wide bootstrap intervals, and lack of section-specific evaluation still
+require monitoring and future-period validation.

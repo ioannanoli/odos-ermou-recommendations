@@ -54,12 +54,17 @@ If the project is installed in editable mode, the shorter command is:
 odos-app
 ```
 
-The interface lets you search the catalog by SKU or product name, combine
-multiple products into a cart, choose the number of results, inspect product
-metadata and component scores, filter by category/brand/age/hero/gender,
-restrict results using an uploaded inventory CSV or Excel workbook, and
-download the recommendations as a UTF-8 CSV. It runs locally and does not need
-an API key.
+The interface previews recommendations on a single product page. Search by SKU
+or product name and it displays two separate sections: **Frequently bought
+together**, ranked from direct historical co-purchases, and **Similar items**,
+ranked from Product2Vec plus product metadata. It also supports inventory CSV or
+Excel uploads, optional filters for similar items, score explanations, and UTF-8
+CSV downloads. Products already shown under Frequently bought together are not
+repeated under Similar items. It runs locally and does not need an API key.
+
+The published HR/MRR figures evaluate the frozen combined hybrid with offline
+basket completion. The two product-page sections are serving views over its
+fitted components and need separate future-period or online evaluation.
 
 ### Command-line interface
 
@@ -320,6 +325,10 @@ This is the reusable production model wrapper.
 - `recommend(cart_skus, top_n, available_skus, metadata_filters, enrich)`
   returns enriched cart recommendations and optionally filters to currently
   sellable inventory.
+- `recommend_frequently_bought_together(sku, ...)` creates a product-page
+  complement section using direct historical co-purchases only.
+- `recommend_similar(sku, ...)` creates a product-page alternatives section
+  using an equal blend of Product2Vec and structured metadata.
 - `save(path)` persists a trusted local model artifact; `load(path)` restores
   it without retraining.
 
@@ -347,8 +356,9 @@ This is the interactive browser interface behind `odos-app`.
   SKU and product name.
 - `metadata_values(catalog, field)` supplies clean values for optional filters.
 - `prepare_results(recommendations)` creates the ranked, user-facing table.
-- `main()` renders cart search, filters, model information, score charts, and
-  CSV download controls.
+- `main()` renders a searchable single-product page with separate Frequently
+  bought together and Similar items sections, inventory controls, score charts,
+  and CSV downloads.
 - `launch()` starts Streamlit when the installed `odos-app` command is used.
 
 ### `phase4_experiments.py`

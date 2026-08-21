@@ -53,3 +53,14 @@ Metrics are Precision@10, Recall@10, Hit Rate@10, MRR@10, catalog coverage, and
 bootstrap confidence intervals. Since item lines have no individual event
 timestamps, the experiment evaluates basket completion—not next-item sequence
 prediction.
+
+## Relationship to product-page serving
+
+Basket completion is the offline proxy used to select and compare the fitted
+signals. Deployment places recommendations on a single product page rather than
+on a cart page. The interface exposes direct co-purchase as **Frequently bought
+together** and an equal Product2Vec/metadata view as **Similar items**. The
+one-time test metrics belong to the combined 40/30/30 hybrid described above;
+the two displayed sections have not been independently evaluated as online
+shelves. Their section-level business effect should be measured on future data
+or in an A/B test.

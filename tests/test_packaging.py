@@ -51,6 +51,7 @@ class PackagingTests(unittest.TestCase):
             "05_experimental_setup.md",
             "06_results.md",
             "07_discussion.md",
+            "FULL_REPORT.md",
         }
         self.assertEqual({path.name for path in (ROOT / "report").glob("*.md")}, expected)
 

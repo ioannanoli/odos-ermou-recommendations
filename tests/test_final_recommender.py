@@ -77,6 +77,23 @@ class FinalRecommenderTests(unittest.TestCase):
             loaded = FinalRecommender.load(path)
             self.assertEqual(loaded.recommend(["A"], top_n=2).to_dict("records"), expected)
 
+    def test_product_page_recommendation_views(self):
+        model = FinalRecommender(self.configuration).fit(self.orders)
+        bought_together = model.recommend_frequently_bought_together("A", top_n=2)
+        similar = model.recommend_similar("A", top_n=2)
+        self.assertEqual(bought_together.iloc[0]["recommended_sku"], "B")
+        self.assertNotIn("A", bought_together["recommended_sku"].tolist())
+        self.assertNotIn("A", similar["recommended_sku"].tolist())
+        self.assertTrue((bought_together["product2vec_score"] == 0).all())
+        self.assertTrue((similar["copurchase_score"] == 0).all())
+
+    def test_product_page_views_apply_inventory(self):
+        model = FinalRecommender(self.configuration).fit(self.orders)
+        result = model.recommend_frequently_bought_together(
+            "A", top_n=2, available_skus={"C"}
+        )
+        self.assertEqual(result["recommended_sku"].tolist(), ["C"])
+
     def test_inventory_loader_preserves_sku_text(self):
         with TemporaryDirectory() as directory:
             path = Path(directory) / "inventory.csv"

@@ -2,11 +2,12 @@
 
 ## Business problem
 
-An online toy shop needs relevant product suggestions for customers viewing an
-item or assembling a cart. Useful recommendations should reflect products that
-are purchased together, products occupying similar positions in the purchase
-graph, plausible relationships not yet observed directly, and constraints such
-as age suitability or product category.
+An online toy shop needs relevant suggestions on each product page. Two customer
+questions are treated separately: **Which alternatives are similar to this
+product?** and **Which complementary products are frequently bought with it?**
+Useful recommendations should reflect direct basket evidence, products occupying
+similar positions in the purchase graph, and attributes such as category, age,
+brand, or hero.
 
 ## Objective
 
@@ -15,7 +16,8 @@ The project builds a local, reproducible recommendation system that:
 - discovers frequent product sets;
 - represents SKU relationships as a normalized co-purchase graph;
 - learns dense product embeddings from weighted Node2vec walks;
-- recommends products for one SKU or a multi-product cart;
+- presents one-SKU product-page recommendations in separate **Similar items**
+  and **Frequently bought together** sections;
 - predicts missing links with Adamic–Adar;
 - supports metadata restrictions;
 - evaluates recommendations on later, unseen orders; and
@@ -23,7 +25,10 @@ The project builds a local, reproducible recommendation system that:
 
 ## Scope
 
-The current system recommends products rather than users. It uses order-level
-baskets and static catalog metadata; it does not use personal profiles,
-customer identifiers, prices, inventory, margin, or item-level event sequences.
-All training and evaluation run locally without an API key.
+The current system recommends products rather than users. The deployed
+Streamlit interface begins from one selected product, while the offline
+basket-completion experiment may use one or more observed products to measure
+retrieval of a hidden order partner. It uses order-level baskets and static
+catalog metadata; it does not use personal profiles, customer identifiers,
+prices, margin, or item-level event sequences. All training and evaluation run
+locally without an API key.
