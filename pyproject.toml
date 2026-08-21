@@ -14,10 +14,13 @@ dependencies = [
     "numpy",
     "openpyxl",
     "pandas",
+    "streamlit",
 ]
 
 [project.scripts]
-odos-recommend = "main:main"
+odos-recommend = "serve_recommendations:main"
+odos-app = "streamlit_app:launch"
+odos-pipeline = "main:main"
 odos-tune = "phase4_experiments:main"
 odos-analyze = "phase6_analysis:main"
 odos-metadata-transfer = "metadata_transfer_experiment:main"
@@ -26,7 +29,7 @@ odos-improve = "experiment_runner:main"
 odos-improvement-plots = "visualization:main"
 
 [tool.setuptools]
-py-modules = ["main", "phase4_experiments", "phase6_analysis", "metadata_transfer_experiment", "graph_visualizations", "experiment_runner", "visualization"]
+py-modules = ["main", "serve_recommendations", "streamlit_app", "phase4_experiments", "phase6_analysis", "metadata_transfer_experiment", "graph_visualizations", "experiment_runner", "visualization"]
 
 [tool.setuptools.packages.find]
 include = ["src", "src.*"]

@@ -10,6 +10,8 @@ import graph_visualizations
 import experiment_runner
 import phase4_experiments
 import phase6_analysis
+import serve_recommendations
+import streamlit_app
 import visualization
 
 
@@ -25,6 +27,8 @@ class PackagingTests(unittest.TestCase):
         self.assertTrue(callable(graph_visualizations.main))
         self.assertTrue(callable(experiment_runner.main))
         self.assertTrue(callable(visualization.main))
+        self.assertTrue(callable(serve_recommendations.main))
+        self.assertTrue(callable(streamlit_app.launch))
 
     def test_pyproject_metadata_and_scripts(self):
         with (ROOT / "pyproject.toml").open("rb") as stream:
@@ -32,8 +36,9 @@ class PackagingTests(unittest.TestCase):
         self.assertEqual(project["name"], "odos-ermou-recommendations")
         self.assertEqual(
             set(project["scripts"]),
-            {"odos-recommend", "odos-tune", "odos-analyze", "odos-metadata-transfer",
-             "odos-visualize", "odos-improve", "odos-improvement-plots"},
+            {"odos-recommend", "odos-app", "odos-pipeline", "odos-tune", "odos-analyze",
+             "odos-metadata-transfer", "odos-visualize", "odos-improve",
+             "odos-improvement-plots"},
         )
 
     def test_analytical_report_has_all_sections(self):

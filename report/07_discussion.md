@@ -38,13 +38,15 @@ than allowing broad age or category nodes to dominate random walks.
 
 ## Recommended next work
 
-1. Keep the frozen configuration unchanged and evaluate it on a new future
-   period rather than tuning to the current test result.
-2. Add inventory, price, margin, and business constraints before serving.
-3. Add a metadata-only fallback for products absent from all training orders.
-4. Collect impressions, clicks, add-to-cart actions, and purchases for an
+1. Operate the persisted frozen model, retraining it on approved new order
+   exports without changing its selected settings.
+2. Feed the serving command a current inventory list and add price, margin, and
+   other business constraints.
+3. Evaluate on a new future period rather than tuning to the current test.
+4. Add a metadata-only fallback for products absent from all training orders.
+5. Collect impressions, clicks, add-to-cart actions, and purchases for an
    online A/B test.
-5. Retrain on a schedule and monitor coverage, drift, status mix, latency, and
+6. Retrain on a schedule and monitor coverage, drift, status mix, latency, and
    popularity/cart-size segment performance.
 
 ## Conclusion

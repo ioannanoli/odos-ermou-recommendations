@@ -27,16 +27,85 @@ dependencies:
 python -m pip install -r requirements.txt
 ```
 
-Alternatively, install the project and its seven console commands in editable
+Alternatively, install the project and its nine console commands in editable
 mode:
 
 ```powershell
 python -m pip install -e .
 ```
 
-This provides `odos-recommend`, `odos-tune`, `odos-analyze`,
+This provides `odos-app`, `odos-recommend`, `odos-pipeline`, `odos-tune`, `odos-analyze`,
 `odos-metadata-transfer`, `odos-visualize`, `odos-improve`, and
 `odos-improvement-plots`.
+
+## Train and use the final model
+
+### Streamlit interface
+
+After training the model at least once, launch the local browser interface:
+
+```powershell
+python -m streamlit run streamlit_app.py
+```
+
+If the project is installed in editable mode, the shorter command is:
+
+```powershell
+odos-app
+```
+
+The interface lets you search the catalog by SKU or product name, combine
+multiple products into a cart, choose the number of results, inspect product
+metadata and component scores, filter by category/brand/age/hero/gender,
+restrict results using an uploaded inventory CSV or Excel workbook, and
+download the recommendations as a UTF-8 CSV. It runs locally and does not need
+an API key.
+
+### Command-line interface
+
+Train the frozen architecture on all historical orders and save it locally:
+
+```powershell
+python serve_recommendations.py train
+```
+
+Recommend for a real cart after training:
+
+```powershell
+python serve_recommendations.py recommend IT16951 SKU-2 --top-n 10
+```
+
+Restrict results to SKUs listed in an inventory CSV or Excel workbook and save
+the output:
+
+```powershell
+python serve_recommendations.py recommend IT16951 SKU-2 `
+  --inventory inventory.csv --inventory-column SKU `
+  --output outputs/serving/cart_recommendations.csv
+```
+
+Inspect the fitted model period and graph size:
+
+```powershell
+python serve_recommendations.py inspect
+```
+
+With an editable installation, replace `python serve_recommendations.py` with
+`odos-recommend`. The saved `models/final_recommender.pkl` is ignored by Git;
+only load this trusted local pickle or one produced by your own training job.
+
+Python code can use the same service directly:
+
+```python
+from src.final_recommender import FinalRecommender
+
+model = FinalRecommender.load("models/final_recommender.pkl")
+recommendations = model.recommend(
+    ["IT16951", "SKU-2"],
+    top_n=10,
+    available_skus={"SKU-3", "SKU-4", "SKU-5"},
+)
+```
 
 Run the optional metadata-to-complement transfer experiment:
 
@@ -96,7 +165,7 @@ Run the automated tests:
 python -m unittest discover -s tests -v
 ```
 
-Run the complete pipeline:
+Run the older analytical/export pipeline:
 
 ```powershell
 python main.py
@@ -170,6 +239,8 @@ OdosErmouReccomendations/
 |       |-- degree_distribution.png
 |       |-- top_copurchase_edges.png
 |       `-- sku_neighborhood_IT16951.png
+|-- models/
+|   `-- final_recommender.pkl
 |-- src/
 |   |-- __init__.py
 |   |-- data_loader.py
@@ -182,9 +253,12 @@ OdosErmouReccomendations/
 |   |-- time_weighting.py
 |   |-- metadata_recommender.py
 |   |-- heterogeneous_graph.py
+|   |-- final_recommender.py
 |   |-- metadata_transfer_recommender.py
 |   `-- recommendation_engine.py
 |-- tests/
+|   |-- test_final_recommender.py
+|   |-- test_streamlit_app.py
 |   |-- test_recommenders.py
 |   `-- test_packaging.py
 |-- report/
@@ -198,6 +272,8 @@ OdosErmouReccomendations/
 |   `-- 07_discussion.md
 |-- .gitignore
 |-- main.py
+|-- serve_recommendations.py
+|-- streamlit_app.py
 |-- phase4_experiments.py
 |-- phase6_analysis.py
 |-- metadata_transfer_experiment.py
@@ -228,7 +304,52 @@ Product2Vec configuration selected during Phase 4.
   export. Its optional arguments allow a different workbook or output folder.
 - The `if __name__ == "__main__"` block configures safe console output for Greek
   text and calls `run_pipeline()` only when the file is run directly.
-- `main()` is the package console entry point used by `odos-recommend`.
+- `main()` is the package console entry point used by `odos-pipeline`.
+
+### `src/final_recommender.py`
+
+This is the reusable production model wrapper.
+
+- `load_frozen_configuration(path)` reads and validates the development-selected
+  JSON without changing any settings.
+- `FinalRecommender.from_config_path(path)` creates an unfitted service from the
+  frozen configuration.
+- `_training_orders(orders)` applies the selected status policy.
+- `fit(orders)` trains the selected graph, heterogeneous Product2Vec, metadata
+  similarity, and weighted hybrid on all supplied historical orders.
+- `recommend(cart_skus, top_n, available_skus, metadata_filters, enrich)`
+  returns enriched cart recommendations and optionally filters to currently
+  sellable inventory.
+- `save(path)` persists a trusted local model artifact; `load(path)` restores
+  it without retraining.
+
+### `serve_recommendations.py`
+
+This is the production command behind `odos-recommend`.
+
+- `load_available_skus(path, sku_column)` reads sellable SKUs from CSV or Excel.
+- `train_model(data_path, config_path, model_path)` fits the frozen architecture
+  on all historical orders and saves `models/final_recommender.pkl`.
+- `recommend_from_model(...)` loads the saved model, applies optional inventory
+  filtering, and optionally writes the recommendations to CSV.
+- `build_parser()` defines the `train`, `recommend`, and `inspect` commands.
+- `main()` executes the selected production command.
+
+### `streamlit_app.py`
+
+This is the interactive browser interface behind `odos-app`.
+
+- `load_model(model_path, modified_ns)` caches the trusted trained model and
+  refreshes it when its file changes.
+- `read_inventory_file(file_name, content)` reads uploaded CSV or Excel stock
+  lists while retaining textual SKUs and leading zeroes.
+- `product_label(sku, catalog)` makes every picker option searchable by both
+  SKU and product name.
+- `metadata_values(catalog, field)` supplies clean values for optional filters.
+- `prepare_results(recommendations)` creates the ranked, user-facing table.
+- `main()` renders cart search, filters, model information, score charts, and
+  CSV download controls.
+- `launch()` starts Streamlit when the installed `odos-app` command is used.
 
 ### `phase4_experiments.py`
 
@@ -697,3 +818,6 @@ Values within one field are alternatives; separate fields must all match. Omit
 - To run a genuinely new final evaluation, use a new future workbook and a new
   output directory. Do not delete the existing guard file merely to rerun the
   same test period.
+- Retrain the serving artifact with `odos-recommend train` whenever a new order
+  export is approved for deployment. This refits the frozen settings; it does
+  not reopen model selection or reevaluate the existing test split.

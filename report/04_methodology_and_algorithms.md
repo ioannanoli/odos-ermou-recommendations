@@ -71,3 +71,13 @@ query role, while edge width represents normalized co-purchase weight.
 ![Selected graph backbone](../outputs/improvement_experiments/plots/selected_graph_backbone.png)
 
 ![Selected graph ego network](../outputs/improvement_experiments/plots/selected_graph_ego_IT16951.png)
+
+## Serving interface
+
+`FinalRecommender` loads the frozen development-selected JSON and refits that
+unchanged architecture on all historical orders available at deployment time.
+The trained graph, embeddings, catalog, and hybrid are persisted as a trusted
+local pickle so cart queries do not retrain the model. Recommendations can be
+restricted to a current inventory SKU list and are enriched with catalog
+metadata. The serving workflow does not rerun or modify the historical test
+evaluation.
