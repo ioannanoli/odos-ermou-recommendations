@@ -54,17 +54,16 @@ If the project is installed in editable mode, the shorter command is:
 odos-app
 ```
 
-The interface previews recommendations on a single product page. Search by SKU
-or product name and it displays two separate sections: **Frequently bought
-together**, ranked from direct historical co-purchases, and **Similar items**,
-ranked from Product2Vec plus product metadata. It also supports inventory CSV or
-Excel uploads, optional filters for similar items, score explanations, and UTF-8
-CSV downloads. Products already shown under Frequently bought together are not
-repeated under Similar items. It runs locally and does not need an API key.
+The interface previews one combined recommendation shelf on a single product
+page. Search by SKU or product name and **Προϊόντα που μπορεί να σας αρέσουν**
+ranks both similar and frequently co-purchased products using the frozen blend:
+40% co-purchase, 30% Product2Vec, and 30% metadata. It also supports inventory
+CSV or Excel uploads, optional metadata filters, score explanations, and UTF-8
+CSV download. It runs locally and does not need an API key.
 
-The published HR/MRR figures evaluate the frozen combined hybrid with offline
-basket completion. The two product-page sections are serving views over its
-fitted components and need separate future-period or online evaluation.
+The published HR/MRR figures evaluate this same combined blend with offline
+basket completion. They do not measure click-through or conversion on the live
+product-page shelf.
 
 ### Command-line interface
 
@@ -325,10 +324,9 @@ This is the reusable production model wrapper.
 - `recommend(cart_skus, top_n, available_skus, metadata_filters, enrich)`
   returns enriched cart recommendations and optionally filters to currently
   sellable inventory.
-- `recommend_frequently_bought_together(sku, ...)` creates a product-page
-  complement section using direct historical co-purchases only.
-- `recommend_similar(sku, ...)` creates a product-page alternatives section
-  using an equal blend of Product2Vec and structured metadata.
+- `recommend_frequently_bought_together(sku, ...)` and
+  `recommend_similar(sku, ...)` expose component-only diagnostic views. The
+  Streamlit page uses the validated combined `recommend(...)` ranking.
 - `save(path)` persists a trusted local model artifact; `load(path)` restores
   it without retraining.
 
@@ -356,9 +354,9 @@ This is the interactive browser interface behind `odos-app`.
   SKU and product name.
 - `metadata_values(catalog, field)` supplies clean values for optional filters.
 - `prepare_results(recommendations)` creates the ranked, user-facing table.
-- `main()` renders a searchable single-product page with separate Frequently
-  bought together and Similar items sections, inventory controls, score charts,
-  and CSV downloads.
+- `main()` renders a searchable single-product page with one combined
+  **Προϊόντα που μπορεί να σας αρέσουν** section, inventory controls, a score
+  chart, and CSV download.
 - `launch()` starts Streamlit when the installed `odos-app` command is used.
 
 ### `phase4_experiments.py`

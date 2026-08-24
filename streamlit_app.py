@@ -28,12 +28,11 @@ FILTER_FIELDS = {
     "Gender": GENDER,
 }
 DISPLAY_FIELDS = [PRODUCT_NAME, CATEGORY, BRAND, AGE, HERO, GENDER]
-FREQUENTLY_BOUGHT_SCORES = {
-    "Co-purchase strength": "copurchase_score",
-}
-SIMILAR_ITEM_SCORES = {
+COMBINED_SCORE_FIELDS = {
+    "Co-purchase": "copurchase_score",
     "Product2Vec": "product2vec_score",
     "Metadata": "metadata_score",
+    "Final score": "recommendation_score",
 }
 
 
@@ -90,16 +89,6 @@ def prepare_results(recommendations: pd.DataFrame, score_columns=None) -> pd.Dat
     return result[[column for column in ordered if column in result]]
 
 
-def exclude_recommendations(candidates, excluded_skus, top_n):
-    """Keep product-page sections distinct while preserving candidate order."""
-    if candidates.empty:
-        return candidates.copy()
-    excluded = {str(sku) for sku in excluded_skus}
-    return candidates[
-        ~candidates["recommended_sku"].astype(str).isin(excluded)
-    ].head(top_n).reset_index(drop=True)
-
-
 def query_signature(product_sku, top_n, filters, available_skus):
     """Describe every input that affects a recommendation result."""
     filter_signature = tuple(
@@ -150,11 +139,10 @@ def _inventory_sidebar() -> set[str] | None:
 
 def _metadata_filters(catalog: pd.DataFrame) -> dict[str, list[str]]:
     filters: dict[str, list[str]] = {}
-    with st.expander("Optional filters for Similar items"):
+    with st.expander("Optional recommendation filters"):
         st.caption(
-            "A similar item must match every filter selected here. These filters "
-            "do not affect Frequently bought together, where complements may be "
-            "from a different category."
+            "A recommendation must match every filter selected here. Leave the "
+            "fields empty to use the model's unrestricted ranking."
         )
         columns = st.columns(2)
         for position, (label, field) in enumerate(FILTER_FIELDS.items()):
@@ -177,12 +165,16 @@ def _selected_product_details(catalog: pd.DataFrame, product_sku: str | None) ->
         st.dataframe(details, hide_index=True, width="stretch")
 
 
-def _show_results(title, description, results, product_sku, score_fields, key) -> None:
+def _show_results(results, product_sku) -> None:
+    title = "Προϊόντα που μπορεί να σας αρέσουν"
     st.subheader(title)
-    st.caption(description)
+    st.caption(
+        "Μία ενιαία κατάταξη που συνδυάζει αγορές μαζί, Product2Vec και "
+        "ομοιότητα μεταδεδομένων."
+    )
     if results.empty:
         st.warning(
-            f"No {title.lower()} matched this product and the active restrictions."
+            "No recommendations matched this product and the active restrictions."
         )
         return
     st.dataframe(
@@ -198,7 +190,7 @@ def _show_results(title, description, results, product_sku, score_fields, key) -
             HERO: st.column_config.TextColumn("Hero"),
             GENDER: st.column_config.TextColumn("Gender"),
             "recommendation_score": st.column_config.NumberColumn(
-                "Section score", format="%.3f"
+                "Final score", format="%.3f"
             ),
             "copurchase_score": st.column_config.NumberColumn(
                 "Co-purchase", format="%.3f"
@@ -211,20 +203,24 @@ def _show_results(title, description, results, product_sku, score_fields, key) -
             ),
         },
     )
-    with st.expander(f"Why these {title.lower()}?"):
+    with st.expander("How the recommendations were calculated"):
+        st.caption(
+            "Final score = 40% co-purchase + 30% Product2Vec + 30% metadata."
+        )
         score_columns = {
-            label: field for label, field in score_fields.items() if field in results
+            label: field for label, field in COMBINED_SCORE_FIELDS.items()
+            if field in results
         }
         chart = results.set_index("recommended_sku")[list(score_columns.values())]
         chart = chart.rename(columns={value: key for key, value in score_columns.items()})
         st.bar_chart(chart)
     csv = results.to_csv(index=False).encode("utf-8-sig")
     st.download_button(
-        f"Download {title.lower()} as CSV",
+        "Download recommendations as CSV",
         data=csv,
-        file_name=f"{key}_{product_sku}.csv",
+        file_name=f"recommendations_{product_sku}.csv",
         mime="text/csv",
-        key=f"download_{key}",
+        key="download_recommendations",
     )
 
 
@@ -237,8 +233,7 @@ def main() -> None:
     )
     st.title("🧸 Odos Ermou Product Page")
     st.write(
-        "Search for one product to preview the recommendation sections that can "
-        "appear on its product page."
+        "Search for one product to preview its combined recommendation list."
     )
 
     model_path = MODEL_PATH
@@ -258,7 +253,7 @@ def main() -> None:
     _model_sidebar(model)
     available_skus = _inventory_sidebar()
 
-    top_n = st.slider("Products per section", min_value=1, max_value=20, value=8)
+    top_n = st.slider("Number of recommendations", min_value=1, max_value=30, value=10)
     product_sku = st.selectbox(
         "Search by SKU or product name",
         options=catalog.index.tolist(),
@@ -277,57 +272,27 @@ def main() -> None:
     ):
         try:
             with st.spinner("Ranking products…"):
-                bought_together = model.recommend_frequently_bought_together(
-                    product_sku,
+                recommendations = model.recommend(
+                    [product_sku],
                     top_n=top_n,
-                    available_skus=available_skus,
-                    enrich=True,
-                )
-                similar = model.recommend_similar(
-                    product_sku,
-                    top_n=max(top_n * 3, top_n + len(bought_together)),
                     available_skus=available_skus,
                     metadata_filters=filters,
                     enrich=True,
                 )
-                similar = exclude_recommendations(
-                    similar, bought_together["recommended_sku"], top_n
-                )
-            st.session_state["frequently_bought_results"] = prepare_results(
-                bought_together,
-                ["recommendation_score", "copurchase_score"],
-            )
-            st.session_state["similar_item_results"] = prepare_results(
-                similar,
-                ["recommendation_score", "product2vec_score", "metadata_score"],
+            st.session_state["recommendation_results"] = prepare_results(
+                recommendations
             )
             st.session_state["recommendation_product"] = product_sku
             st.session_state["recommendation_signature"] = current_signature
         except Exception as error:
             st.error(f"Recommendations could not be generated: {error}")
 
-    if "frequently_bought_results" in st.session_state:
+    if "recommendation_results" in st.session_state:
         previous_product = st.session_state.get("recommendation_product")
         if st.session_state.get("recommendation_signature") != current_signature:
             st.info("The inputs changed. Open product recommendations again to refresh.")
         st.divider()
-        _show_results(
-            "Frequently bought together",
-            "Direct complements observed with this SKU in historical order baskets.",
-            st.session_state["frequently_bought_results"],
-            previous_product,
-            FREQUENTLY_BOUGHT_SCORES,
-            "frequently_bought_together",
-        )
-        st.divider()
-        _show_results(
-            "Similar items",
-            "Substitutes and close alternatives ranked by Product2Vec and product metadata.",
-            st.session_state["similar_item_results"],
-            previous_product,
-            SIMILAR_ITEM_SCORES,
-            "similar_items",
-        )
+        _show_results(st.session_state["recommendation_results"], previous_product)
 
 
 def launch() -> None:

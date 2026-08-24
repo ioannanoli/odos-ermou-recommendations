@@ -57,10 +57,8 @@ prediction.
 ## Relationship to product-page serving
 
 Basket completion is the offline proxy used to select and compare the fitted
-signals. Deployment places recommendations on a single product page rather than
-on a cart page. The interface exposes direct co-purchase as **Frequently bought
-together** and an equal Product2Vec/metadata view as **Similar items**. The
-one-time test metrics belong to the combined 40/30/30 hybrid described above;
-the two displayed sections have not been independently evaluated as online
-shelves. Their section-level business effect should be measured on future data
-or in an A/B test.
+signals. Deployment places one combined recommendation shelf on a single
+product page rather than on a cart page. The interface uses the same 40/30/30
+hybrid evaluated above, starting from one viewed SKU. Its live business effect
+must still be measured on future data or in an A/B test because offline basket
+completion does not measure customer interaction.

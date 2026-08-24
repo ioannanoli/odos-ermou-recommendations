@@ -2,12 +2,11 @@
 
 ## Business problem
 
-An online toy shop needs relevant suggestions on each product page. Two customer
-questions are treated separately: **Which alternatives are similar to this
-product?** and **Which complementary products are frequently bought with it?**
-Useful recommendations should reflect direct basket evidence, products occupying
-similar positions in the purchase graph, and attributes such as category, age,
-brand, or hero.
+An online toy shop needs relevant suggestions on each product page. The shelf
+must balance alternatives similar to the viewed product with complementary
+products frequently bought with it. Useful recommendations should therefore
+combine direct basket evidence, positions in the purchase graph, and attributes
+such as category, age, brand, or hero in one ranked list.
 
 ## Objective
 
@@ -16,8 +15,7 @@ The project builds a local, reproducible recommendation system that:
 - discovers frequent product sets;
 - represents SKU relationships as a normalized co-purchase graph;
 - learns dense product embeddings from weighted Node2vec walks;
-- presents one-SKU product-page recommendations in separate **Similar items**
-  and **Frequently bought together** sections;
+- presents a combined one-SKU product-page recommendation shelf;
 - predicts missing links with Adamic–Adar;
 - supports metadata restrictions;
 - evaluates recommendations on later, unseen orders; and

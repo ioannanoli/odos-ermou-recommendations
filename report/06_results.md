@@ -51,11 +51,9 @@ train+development and evaluated once on the 75 test queries.
 The final model retrieved 28 of 75 hidden products versus 22 for the original
 baseline.
 
-These figures evaluate the frozen combined hybrid under basket completion. The
-product-page interface subsequently separates fitted signals into Frequently
-bought together and Similar items for clearer customer presentation. Therefore,
-0.373 Hit Rate must not be reported as the independent performance of either
-product-page section.
+These figures evaluate the same frozen combined hybrid used by the single
+product-page shelf. However, 0.373 Hit Rate measures offline basket completion,
+not click-through, add-to-cart rate, conversion, or revenue on that shelf.
 
 ![Final test comparison](../outputs/improvement_experiments/plots/final_baseline_comparison.png)
 

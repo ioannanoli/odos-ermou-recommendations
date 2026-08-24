@@ -78,18 +78,9 @@ query role, while edge width represents normalized co-purchase weight.
 unchanged architecture on all historical orders available at deployment time.
 The trained graph, embeddings, catalog, and hybrid are persisted as a trusted
 local pickle so serving queries do not retrain the model. The Streamlit product
-page separates direct co-purchase complements under **Frequently bought
-together** from Product2Vec/metadata alternatives under **Similar items**.
-Recommendations can be restricted to a current inventory SKU list and are
-enriched with catalog metadata. The serving workflow does not rerun or modify
-the historical test evaluation.
-
-The two product-page sections are ranking views over the fitted components, so
-they require no retraining. Frequently bought together uses 100% direct
-co-purchase evidence. Similar items uses 50% Product2Vec and 50% structured
-metadata. Products already shown in the first section are removed from the
-second to avoid duplication. Metadata filters apply only to Similar items;
-forcing complements into the same category would remove useful cross-category
-pairs. The published offline metrics evaluate the selected combined hybrid and
-must not be interpreted as separate accuracy estimates for these two serving
-views.
+page uses one viewed SKU and presents one **Προϊόντα που μπορεί να σας αρέσουν**
+shelf. Its ranking is the frozen combined model: 40% direct co-purchase, 30%
+Product2Vec, and 30% structured metadata. Recommendations can be restricted to
+a current inventory SKU list, optionally filtered by metadata, and enriched
+with catalog fields. The serving workflow does not rerun or modify the
+historical test evaluation.

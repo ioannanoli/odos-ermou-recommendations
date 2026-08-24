@@ -26,11 +26,11 @@ to Product2Vec, and 30% to metadata similarity. It improves Hit Rate@10 from
 0.076 on the one-time test set of 75 eligible basket-completion queries. Rare-
 product Hit Rate@10 rises from 0.108 to 0.162, although this remains the main
 weakness. The final system is packaged as a persisted local model and a
-Streamlit product-page interface with separate Similar items and Frequently
-bought together sections, inventory restrictions, score explanations, and CSV
-export. The reported test figures belong to the combined offline hybrid; the
-two product-page sections are serving views that still require section-specific
-evaluation. No external API or personal customer profile is required.
+Streamlit product-page interface with one combined **Προϊόντα που μπορεί να σας
+αρέσουν** shelf, inventory restrictions, score explanations, and CSV export.
+The reported test figures evaluate the same combined hybrid used by this shelf,
+although online customer impact still requires separate measurement. No
+external API or personal customer profile is required.
 
 ## Table of Contents
 
@@ -59,17 +59,16 @@ Online shops often contain thousands of products, making it difficult for a
 customer to discover relevant accessories, alternatives, or products belonging
 to the same theme. The business problem addressed in this project is therefore:
 
-> When a customer views one product, which alternatives should appear under
-> **Similar items**, and which complements should appear under **Frequently
-> bought together**?
+> When a customer views one product, which similar alternatives and frequently
+> co-purchased complements should appear in the combined recommendation shelf?
 
 The project focuses on product-to-product recommendation rather than user
 profiling. Historical orders provide implicit evidence: two products appearing
 in the same order form a co-purchase relationship. Structured catalog fields
 provide content evidence even when a product is rare. For example, purchase
 data may connect a LEGO set to a storage box, while metadata can identify other
-LEGO sets as alternatives. The product page presents these relationship types
-separately instead of mixing them into one unexplained list.
+LEGO sets as alternatives. The product page combines these relationship types
+in one ranked list and exposes their component scores for interpretation.
 
 This distinction between *complements* and *substitutes* guided the model
 design. Co-purchase relationships usually indicate complements. Product
@@ -285,12 +284,10 @@ final_score = 0.40 × co-purchase
 
 The frozen configuration is refitted on all approved history for deployment and
 saved as a trusted local model. A Streamlit product page exposes one-SKU search,
-inventory uploads, score components, and CSV download. Direct co-purchase
-evidence feeds **Frequently bought together**, while an equal Product2Vec and
-metadata blend feeds **Similar items**. Similar-item metadata filters do not
-constrain complements. Items already displayed in Frequently bought together
-are removed from Similar items. These are serving views over the fitted
-components, so the interface does not retrain or reevaluate the test set.
+inventory uploads, score components, and CSV download. Its single **Προϊόντα που
+μπορεί να σας αρέσουν** shelf uses the frozen final score: 40% direct
+co-purchase, 30% Product2Vec, and 30% metadata. The interface does not retrain
+or reevaluate the test set.
 
 ## 3. Experiments: Setup and Configuration
 
@@ -322,9 +319,8 @@ whether the hidden basket partner appears in the top ten recommendations.
 
 This basket-completion task is an offline proxy for learning and comparing
 signals; it does not mean recommendations are placed on the cart page. The live
-interface starts from one viewed product. Furthermore, the one-time metrics
-evaluate the selected combined hybrid, not the Similar items and Frequently
-bought together sections independently.
+interface starts from one viewed product and uses the same selected combined
+hybrid in one recommendation shelf.
 
 ### 3.3 Controlled model selection
 
@@ -435,10 +431,9 @@ original baseline. Thus, six additional test baskets contain their hidden item
 in the first ten positions. MRR also rises, suggesting that hits tend to occur
 earlier, not merely somewhere near position ten.
 
-The 0.373 Hit Rate belongs to the combined 40/30/30 hybrid evaluated under
-basket completion. It must not be presented as the independent accuracy of
-either product-page section. The separated shelves are a clearer deployment
-design based on the meanings of the fitted signals and require their own
+The 0.373 Hit Rate belongs to the combined 40/30/30 hybrid used by the product
+page, but it was measured under offline basket completion. It must not be
+presented as product-page click-through or conversion performance; those require
 future-period or online measurement.
 
 ![One-time final comparison](../outputs/improvement_experiments/plots/final_baseline_comparison.png)
@@ -576,8 +571,8 @@ tested algorithm.
   recommendation a customer might consider relevant.
 - The offline task does not measure impressions, clicks, conversion, revenue,
   margin, novelty, diversity, or satisfaction.
-- Similar items and Frequently bought together reuse fitted components but have
-  not yet been evaluated independently as product-page shelves.
+- The product-page shelf has not yet been evaluated with live interaction
+  metrics.
 - The model has no customer or session representation.
 - Products absent from training orders require a content or business-rule
   fallback.
@@ -600,9 +595,9 @@ tested algorithm.
    sequence timestamps to distinguish interest from completed purchase.
 5. **New-period validation.** Freeze the current system and evaluate on later
    orders without changing settings.
-6. **Online experiment.** Compare the product-page shelves with the current shop
-   logic and record click-through, add-to-cart rate, conversion, and revenue
-   separately for Similar items and Frequently bought together.
+6. **Online experiment.** Compare the combined product-page shelf with the
+   current shop logic and record click-through, add-to-cart rate, conversion,
+   and revenue.
 7. **Beyond accuracy.** Add diversity, novelty, serendipity, and category/brand
    concentration metrics, consistent with broader recommender-system evaluation
    practice [6].
