@@ -59,11 +59,18 @@ class FinalRecommenderTests(unittest.TestCase):
         self.assertEqual(configuration["architecture"], "heterogeneous")
         self.assertEqual(configuration["blend_weights"]["copurchase"], 0.4)
 
+    def test_product_page_configuration_uses_tfidf(self):
+        configuration = load_frozen_configuration()
+        self.assertEqual(configuration["blend_weights"]["copurchase"], 0.4)
+        self.assertEqual(configuration["blend_weights"]["text"], 0.4)
+        self.assertEqual(configuration["selection_split"], "development_single_sku")
+
     def test_fit_recommend_inventory_and_enrichment(self):
         model = FinalRecommender(self.configuration).fit(self.orders)
         recommendations = model.recommend(["A"], top_n=2)
         self.assertEqual(recommendations.iloc[0]["recommended_sku"], "B")
         self.assertIn("Product Name", recommendations.columns)
+        self.assertIn("text_score", recommendations.columns)
         available = model.recommend(["A"], top_n=2, available_skus={"C"})
         self.assertEqual(available["recommended_sku"].tolist(), ["C"])
         self.assertEqual(model.training_summary["order_count"], 3)

@@ -1,5 +1,7 @@
 import unittest
 
+import networkx as nx
+import numpy as np
 import pandas as pd
 
 from src.copurchase_recommender import CoPurchaseRecommender, build_copurchase_graph
@@ -16,6 +18,7 @@ from src.recommendation_engine import (AdamicAdarRecommender,
                                        RecommendationEngine, filter_by_metadata)
 from src.metadata_transfer_recommender import MetadataEnhancedEngine, MetadataTransferRecommender
 from src.time_weighting import order_time_weights
+from src.tfidf_recommender import TfidfNameRecommender
 from phase4_experiments import sample_configurations
 from graph_visualizations import graph_statistics, neighborhood_subgraph, strongest_edge_backbone
 
@@ -63,6 +66,22 @@ class RecommenderTests(unittest.TestCase):
         second = Product2VecRecommender(**options).fit(self.orders)
         self.assertEqual(first.recommend("A", 2).to_dict("records"),
                          second.recommend("A", 2).to_dict("records"))
+
+    def test_node2vec_does_not_depend_on_graph_insertion_order(self):
+        edges = [("A", "B"), ("A", "C"), ("B", "C")]
+        graphs = []
+        for ordered_edges in (edges, list(reversed(edges))):
+            graph = nx.Graph()
+            for left, right in ordered_edges:
+                graph.add_edge(left, right, weight=1.0)
+            for node in graph:
+                graph.nodes[node]["order_count"] = 2
+            graphs.append(graph)
+        options = dict(n_components=8, walk_length=5, walks_per_node=2,
+                       negative_samples=2, epochs=2, random_state=7)
+        first = Product2VecRecommender(**options).fit(graph=graphs[0])
+        second = Product2VecRecommender(**options).fit(graph=graphs[1])
+        np.testing.assert_allclose(first.embeddings, second.embeddings)
 
     def test_chronological_split_keeps_orders_intact(self):
         dated = pd.DataFrame({
@@ -216,15 +235,18 @@ class RecommenderTests(unittest.TestCase):
         copurchase = CoPurchaseRecommender().fit(orders, catalog)
         adamic = AdamicAdarRecommender().fit(graph=copurchase.graph)
         metadata = MetadataSimilarityRecommender().fit(catalog)
+        text = TfidfNameRecommender().fit(transfer_catalog)
         engine = HybridRecommendationEngine(
             copurchase, vector, adamic, catalog,
-            weights={"copurchase": 0.4, "product2vec": 0.4, "metadata": 0.2},
-            metadata_model=metadata,
+            weights={"copurchase": 0.3, "product2vec": 0.3,
+                     "metadata": 0.2, "text": 0.2},
+            metadata_model=metadata, text_model=text,
         )
         result = engine.recommend(["R"], top_n=2)
         self.assertFalse(result.empty)
         self.assertIn("copurchase_score", result.columns)
         self.assertIn("metadata_score", result.columns)
+        self.assertIn("text_score", result.columns)
         self.assertAlmostEqual(sum(engine.weights.values()), 1.0)
 
     def test_heterogeneous_graph_excludes_unknown_and_downweights_hubs(self):

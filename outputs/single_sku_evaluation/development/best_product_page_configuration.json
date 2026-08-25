@@ -1,0 +1,88 @@
+{
+  "selection_split": "development_single_sku",
+  "random_seed": 42,
+  "k": 10,
+  "status_policy": "all",
+  "allowed_statuses": null,
+  "graph": {
+    "weighting": "cosine",
+    "min_pair_count": 1,
+    "half_life_months": 6.0,
+    "ranking": "confidence"
+  },
+  "product2vec": {
+    "n_components": 48,
+    "walk_length": 8,
+    "walks_per_node": 2,
+    "window_size": 3,
+    "negative_samples": 2,
+    "epochs": 2,
+    "learning_rate": 0.05,
+    "p": 1.0,
+    "q": 1.0
+  },
+  "blend_weights": {
+    "copurchase": 0.4,
+    "product2vec": 0.1,
+    "metadata": 0.1,
+    "text": 0.4
+  },
+  "metadata_field_weights": {
+    "\u039a\u03b1\u03c4\u03b7\u03b3\u03bf\u03c1\u03af\u03b5\u03c2 \u03c0\u03c1\u03bf\u03ca\u03cc\u03bd\u03c4\u03c9\u03bd": 0.35,
+    "\u039c\u03ac\u03c1\u03ba\u03b5\u03c2": 0.2,
+    "\u03a0\u03c1\u03bf\u03ca\u03cc\u03bd \u0397\u03bb\u03b9\u03ba\u03af\u03b1": 0.25,
+    "\u03a0\u03c1\u03bf\u03ca\u03cc\u03bd \u0389\u03c1\u03c9\u03b1\u03c2": 0.15,
+    "\u03a0\u03c1\u03bf\u03ca\u03cc\u03bd \u03a6\u03cd\u03bb\u03bb\u03bf": 0.05
+  },
+  "architecture": "heterogeneous",
+  "heterogeneous_relationship_weights": {
+    "copurchase": 1.0,
+    "category": 0.05,
+    "brand": 0.05,
+    "age": 0.05,
+    "hero": 0.05
+  },
+  "development_queries": 76,
+  "development_metrics": {
+    "precision_at_k": 0.0394736842105263,
+    "recall_at_k": 0.3947368421052631,
+    "hit_rate_at_k": 0.3947368421052631,
+    "mrr_at_k": 0.2551535087719299,
+    "catalog_coverage_at_k": 0.11027725661872
+  },
+  "experiment_record": {
+    "random_seed": 42,
+    "training_start": "2019-04-15 09:32:57",
+    "training_end": "2024-07-13 13:56:34",
+    "development_start": "2024-07-14 04:52:44",
+    "development_end": "2025-08-21 06:48:08",
+    "status_policy": "all",
+    "graph_weighting": "cosine",
+    "edge_threshold": 1,
+    "copurchase_ranking": "confidence",
+    "half_life_months": 6.0,
+    "product2vec_config": "{\"epochs\": 2, \"learning_rate\": 0.05, \"n_components\": 48, \"negative_samples\": 2, \"p\": 1.0, \"q\": 1.0, \"walk_length\": 8, \"walks_per_node\": 2, \"window_size\": 3}",
+    "blend_weights": "{\"adamic_adar\": 0.0, \"copurchase\": 0.4, \"metadata\": 0.3, \"product2vec\": 0.3}",
+    "metadata_weights": "{\"\u039a\u03b1\u03c4\u03b7\u03b3\u03bf\u03c1\u03af\u03b5\u03c2 \u03c0\u03c1\u03bf\u03ca\u03cc\u03bd\u03c4\u03c9\u03bd\": 0.35, \"\u039c\u03ac\u03c1\u03ba\u03b5\u03c2\": 0.2, \"\u03a0\u03c1\u03bf\u03ca\u03cc\u03bd \u0389\u03c1\u03c9\u03b1\u03c2\": 0.15, \"\u03a0\u03c1\u03bf\u03ca\u03cc\u03bd \u0397\u03bb\u03b9\u03ba\u03af\u03b1\": 0.25, \"\u03a0\u03c1\u03bf\u03ca\u03cc\u03bd \u03a6\u03cd\u03bb\u03bb\u03bf\": 0.05}",
+    "evaluation_k": 10,
+    "evaluated_queries": 76
+  },
+  "tfidf": {
+    "word_weight": 0.6,
+    "char_weight": 0.4,
+    "word_ngram_range": [
+      1,
+      2
+    ],
+    "char_ngram_range": [
+      3,
+      5
+    ]
+  },
+  "development_single_sku_metrics": {
+    "hit_rate_at_k": 0.40789473684210525,
+    "mrr_at_k": 0.21439536340852128,
+    "candidate_recall": 0.5526315789473685,
+    "catalog_coverage_at_k": 0.10798415676464457
+  }
+}

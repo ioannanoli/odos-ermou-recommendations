@@ -32,7 +32,7 @@ COMBINED_SCORE_FIELDS = {
     "Co-purchase": "copurchase_score",
     "Product2Vec": "product2vec_score",
     "Metadata": "metadata_score",
-    "Final score": "recommendation_score",
+    "TF-IDF name": "text_score",
 }
 
 
@@ -82,7 +82,7 @@ def prepare_results(recommendations: pd.DataFrame, score_columns=None) -> pd.Dat
     result.insert(0, "Rank", range(1, len(result) + 1))
     score_columns = list(score_columns or [
         "recommendation_score", "copurchase_score", "product2vec_score",
-        "metadata_score",
+        "metadata_score", "text_score",
     ])
     ordered = ["Rank", "recommended_sku", PRODUCT_NAME, CATEGORY, BRAND, AGE,
                HERO, GENDER, *score_columns]
@@ -165,7 +165,21 @@ def _selected_product_details(catalog: pd.DataFrame, product_sku: str | None) ->
         st.dataframe(details, hide_index=True, width="stretch")
 
 
-def _show_results(results, product_sku) -> None:
+def score_formula(blend_weights) -> str:
+    """Format the active serving weights for the score explanation."""
+    labels = {
+        "copurchase": "co-purchase", "product2vec": "Product2Vec",
+        "metadata": "metadata", "text": "TF-IDF product-name similarity",
+        "adamic_adar": "Adamicâ€“Adar",
+    }
+    parts = [
+        f"{float(weight):.0%} {labels.get(signal, signal)}"
+        for signal, weight in blend_weights.items() if float(weight) > 0
+    ]
+    return "Final score = " + " + ".join(parts) + "."
+
+
+def _show_results(results, product_sku, blend_weights) -> None:
     title = "Προϊόντα που μπορεί να σας αρέσουν"
     st.subheader(title)
     st.caption(
@@ -201,12 +215,13 @@ def _show_results(results, product_sku) -> None:
             "metadata_score": st.column_config.NumberColumn(
                 "Metadata", format="%.3f"
             ),
+            "text_score": st.column_config.NumberColumn(
+                "TF-IDF name", format="%.3f"
+            ),
         },
     )
     with st.expander("How the recommendations were calculated"):
-        st.caption(
-            "Final score = 40% co-purchase + 30% Product2Vec + 30% metadata."
-        )
+        st.caption(score_formula(blend_weights))
         score_columns = {
             label: field for label, field in COMBINED_SCORE_FIELDS.items()
             if field in results
@@ -292,7 +307,10 @@ def main() -> None:
         if st.session_state.get("recommendation_signature") != current_signature:
             st.info("The inputs changed. Open product recommendations again to refresh.")
         st.divider()
-        _show_results(st.session_state["recommendation_results"], previous_product)
+        _show_results(
+            st.session_state["recommendation_results"], previous_product,
+            model.configuration["blend_weights"],
+        )
 
 
 def launch() -> None:

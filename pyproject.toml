@@ -27,9 +27,11 @@ odos-metadata-transfer = "metadata_transfer_experiment:main"
 odos-visualize = "graph_visualizations:main"
 odos-improve = "experiment_runner:main"
 odos-improvement-plots = "visualization:main"
+odos-evaluate-product-page = "single_sku_evaluation:main"
+odos-evaluate-future = "future_period_evaluation:main"
 
 [tool.setuptools]
-py-modules = ["main", "serve_recommendations", "streamlit_app", "phase4_experiments", "phase6_analysis", "metadata_transfer_experiment", "graph_visualizations", "experiment_runner", "visualization"]
+py-modules = ["main", "serve_recommendations", "streamlit_app", "phase4_experiments", "phase6_analysis", "metadata_transfer_experiment", "graph_visualizations", "experiment_runner", "visualization", "single_sku_evaluation", "future_period_evaluation"]
 
 [tool.setuptools.packages.find]
 include = ["src", "src.*"]

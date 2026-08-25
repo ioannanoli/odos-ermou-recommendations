@@ -27,7 +27,7 @@ dependencies:
 python -m pip install -r requirements.txt
 ```
 
-Alternatively, install the project and its nine console commands in editable
+Alternatively, install the project and its eleven console commands in editable
 mode:
 
 ```powershell
@@ -36,7 +36,8 @@ python -m pip install -e .
 
 This provides `odos-app`, `odos-recommend`, `odos-pipeline`, `odos-tune`, `odos-analyze`,
 `odos-metadata-transfer`, `odos-visualize`, `odos-improve`, and
-`odos-improvement-plots`.
+`odos-improvement-plots`, `odos-evaluate-product-page`, and
+`odos-evaluate-future`.
 
 ## Train and use the final model
 
@@ -56,14 +57,16 @@ odos-app
 
 The interface previews one combined recommendation shelf on a single product
 page. Search by SKU or product name and **Προϊόντα που μπορεί να σας αρέσουν**
-ranks both similar and frequently co-purchased products using the frozen blend:
-40% co-purchase, 30% Product2Vec, and 30% metadata. It also supports inventory
+ranks both similar and frequently co-purchased products using the product-page
+blend: 40% co-purchase, 10% Product2Vec, 10% structured metadata, and 40%
+TF-IDF product-name similarity. It also supports inventory
 CSV or Excel uploads, optional metadata filters, score explanations, and UTF-8
 CSV download. It runs locally and does not need an API key.
 
-The published HR/MRR figures evaluate this same combined blend with offline
-basket completion. They do not measure click-through or conversion on the live
-product-page shelf.
+The 0.373 test HR reported below belongs to the earlier 40/30/30 frozen model.
+The TF-IDF extension has development-only evidence and must be evaluated on a
+new future period before receiving a final test claim. Neither offline result
+measures click-through or conversion on the live product-page shelf.
 
 ### Command-line interface
 
@@ -144,7 +147,7 @@ Generate or refresh report plots without reevaluating any model:
 python visualization.py --center-sku IT16951
 ```
 
-## Selected improvement result
+## Historical frozen test result
 
 The frozen final model uses all statuses, an unpruned cosine graph with direct
 confidence ranking, six-month time decay, the original 48-dimensional
@@ -162,6 +165,21 @@ top-level blend is 40% direct co-purchase, 30% Product2Vec, 30% metadata, and
 The test has only 75 eligible queries. The final Hit Rate@10 bootstrap interval
 is 0.267–0.480, so the point gain is encouraging but should be validated on a
 future order period.
+
+## TF-IDF product-page candidate
+
+The dedicated one-SKU development protocol gives the earlier 40/30/30 hybrid
+HR@10 **0.316** after deterministic walk ordering. Product-name TF-IDF alone
+also reaches **0.316**. A coarse search of 84 blends, with every signal kept
+active, selected 40% co-purchase, 10% Product2Vec, 10% metadata, and 40% TF-IDF.
+It reaches HR@10 **0.408**, MRR@10 **0.214**, candidate recall@100 **0.553**,
+and coverage@10 **0.108** across 76 orders. It adds eight hits while losing one
+earlier hit, for a net gain of seven. These are
+development-selected figures, not a new test result.
+
+This candidate is now frozen. The configuration hash is checked whenever the
+default model is trained, and the existing development and historical test
+periods are closed to further selection.
 
 Run the automated tests:
 
@@ -194,6 +212,32 @@ Run Phase 6 leave-one-out evaluation and error analysis:
 python phase6_analysis.py
 ```
 
+Run the dedicated one-SKU product-page evaluation on development orders:
+
+```powershell
+python single_sku_evaluation.py
+```
+
+This command reproduces the locked development metrics without changing the
+model. The selected configuration and 76-query set are now frozen. Attempts to
+use `--tune-weights` or reopen `--split test` are rejected. The archived weight
+search remains in `outputs/single_sku_evaluation/development/`.
+
+When a genuinely newer WooCommerce export is available, evaluate the unchanged
+model with:
+
+```powershell
+python future_period_evaluation.py `
+  --future data/Orders-Export-NEW.xlsx `
+  --output outputs/future_evaluation/2026-new-period
+```
+
+Every evaluated line must be strictly later than **2026-06-19 14:28:25**.
+The command refuses overlapping order IDs, altered frozen weights, training
+history beyond the cutoff, an empty eligible query set, or overwriting an
+earlier evaluation. It performs no tuning. After editable installation, use
+`odos-evaluate-future`.
+
 The default pipeline keeps every exported order status, including cancelled,
 pending, refunded, and failed orders. Rows without an order ID or usable SKU
 are removed.
@@ -205,11 +249,6 @@ OdosErmouReccomendations/
 |-- data/
 |   `-- Orders-Export-2026-June-07-2054.xlsx
 |-- outputs/
-|   |-- frequent_itemsets.csv
-|   |-- copurchase_recommendations.csv
-|   |-- product2vec_recommendations.csv
-|   |-- adamic_adar_recommendations.csv
-|   |-- cart_recommendations.csv
 |   |-- phase4/
 |   |   |-- split_summary.csv
 |   |   |-- baseline_metrics.csv
@@ -220,6 +259,26 @@ OdosErmouReccomendations/
 |   |   |-- prediction_outcomes.csv
 |   |   |-- segment_errors.csv
 |   |   `-- qualitative_samples.csv
+|   |-- single_sku_evaluation/
+|   |   `-- development/
+|   |       |-- summary_metrics.csv
+|   |       |-- prediction_outcomes.csv
+|   |       |-- bootstrap_intervals.csv
+|   |       |-- popularity_segments.csv
+|   |       |-- queries.csv
+|   |       |-- split_summary.csv
+|   |       |-- four_signal_weight_search.csv
+|   |       |-- best_product_page_configuration.json
+|   |       |-- model_freeze_manifest.json
+|   |       `-- run_configuration.json
+|   |-- future_evaluation/
+|   |   `-- NEW-PERIOD/
+|   |       |-- summary_metrics.csv
+|   |       |-- prediction_outcomes.csv
+|   |       |-- bootstrap_intervals.csv
+|   |       |-- popularity_segments.csv
+|   |       |-- queries.csv
+|   |       `-- run_configuration.json
 |   |-- metadata_transfer/
 |   |   |-- development_weight_search.csv
 |   |   |-- summary_comparison.csv
@@ -256,12 +315,17 @@ OdosErmouReccomendations/
 |   |-- model_config.py
 |   |-- time_weighting.py
 |   |-- metadata_recommender.py
+|   |-- tfidf_recommender.py
 |   |-- heterogeneous_graph.py
 |   |-- final_recommender.py
+|   |-- model_freeze.py
 |   |-- metadata_transfer_recommender.py
 |   `-- recommendation_engine.py
 |-- tests/
 |   |-- test_final_recommender.py
+|   |-- test_single_sku_evaluation.py
+|   |-- test_tfidf_recommender.py
+|   |-- test_model_freeze_future.py
 |   |-- test_streamlit_app.py
 |   |-- test_recommenders.py
 |   `-- test_packaging.py
@@ -280,6 +344,8 @@ OdosErmouReccomendations/
 |-- streamlit_app.py
 |-- phase4_experiments.py
 |-- phase6_analysis.py
+|-- single_sku_evaluation.py
+|-- future_period_evaluation.py
 |-- metadata_transfer_experiment.py
 |-- graph_visualizations.py
 |-- experiment_runner.py
@@ -315,12 +381,14 @@ Product2Vec configuration selected during Phase 4.
 This is the reusable production model wrapper.
 
 - `load_frozen_configuration(path)` reads and validates the development-selected
-  JSON without changing any settings.
+  JSON without changing any settings and verifies the current serving
+  configuration against its freeze hash.
 - `FinalRecommender.from_config_path(path)` creates an unfitted service from the
   frozen configuration.
 - `_training_orders(orders)` applies the selected status policy.
 - `fit(orders)` trains the selected graph, heterogeneous Product2Vec, metadata
-  similarity, and weighted hybrid on all supplied historical orders.
+  similarity, product-name TF-IDF, and weighted hybrid on all supplied
+  historical orders.
 - `recommend(cart_skus, top_n, available_skus, metadata_filters, enrich)`
   returns enriched cart recommendations and optionally filters to currently
   sellable inventory.
@@ -329,6 +397,25 @@ This is the reusable production model wrapper.
   Streamlit page uses the validated combined `recommend(...)` ranking.
 - `save(path)` persists a trusted local model artifact; `load(path)` restores
   it without retraining.
+
+### `src/model_freeze.py`
+
+Defines and enforces the product-page model freeze.
+
+- `HISTORICAL_TEST_CONFIG_PATH`, `DEFAULT_CONFIG_PATH`, and
+  `FREEZE_MANIFEST_PATH` identify the archived test model, current serving
+  model, and freeze record.
+- `sha256_file(path)` fingerprints exact file bytes.
+- `load_freeze_manifest(path)` validates and loads the locked cutoff, hash, and
+  tuning state.
+- `verify_frozen_configuration(...)` rejects any byte-level change to the
+  selected product-page configuration.
+- `verify_frozen_artifacts(...)` verifies the configuration, query set, and
+  archived weight-search hashes together.
+- `assert_development_tuning_open(...)` blocks further searches on the 76
+  development queries.
+- `assert_legacy_test_reuse_allowed(...)` prevents evaluating the TF-IDF
+  candidate on the already-seen historical test period.
 
 ### `serve_recommendations.py`
 
@@ -354,6 +441,8 @@ This is the interactive browser interface behind `odos-app`.
   SKU and product name.
 - `metadata_values(catalog, field)` supplies clean values for optional filters.
 - `prepare_results(recommendations)` creates the ranked, user-facing table.
+- `score_formula(blend_weights)` renders the active four-signal weights in the
+  recommendation explanation instead of hard-coding an obsolete formula.
 - `main()` renders a searchable single-product page with one combined
   **Προϊόντα που μπορεί να σας αρέσουν** section, inventory controls, a score
   chart, and CSV download.
@@ -395,8 +484,59 @@ Contains the reusable Phase 4 splitting and metric logic.
   eligible queries, optionally takes a reproducible sample, caches repeated SKU
   recommendations, and reports ranking metrics, catalog coverage, and query
   counts.
+- `single_sku_queries(orders, known_skus, max_queries, random_state)` selects
+  exactly one reproducible viewed-SKU/hidden-target pair per eligible order.
+  Both products must exist in the training catalog.
+- `evaluate_single_sku_engine(engine, queries, train_orders, catalog_skus, k,
+  candidate_k)` evaluates a product-page ranker and returns overall metrics plus
+  per-query ranks, hits, candidate recall, popularity, and predictions.
 - `split_summary(train, dev, test)` reports lines, orders, unique SKUs,
   multi-item baskets, and date boundaries for each split.
+
+### `single_sku_evaluation.py`
+
+This is the dedicated product-page offline evaluation entry point.
+
+- `PopularityBaseline(...)` constructs a global-popularity baseline or a
+  category-first popularity baseline from training orders only.
+- `PopularityBaseline.recommend(...)` excludes the viewed SKU and ranks the
+  remaining training products by order frequency, optionally prioritizing
+  products that share a category.
+- `_component_engine(model, signal)` exposes one already-fitted signal at a
+  time so component comparisons use identical learned artifacts.
+- `_hybrid_engine(model, weights)` creates a four-signal view over the fitted
+  components without retraining.
+- `four_signal_weight_grid(step)` generates coarse blends that sum to one and
+  keep co-purchase, Product2Vec, metadata, and TF-IDF active.
+- `search_four_signal_weights(...)` evaluates those blends and ranks them by
+  Hit Rate, MRR, candidate recall, and coverage.
+- `_segment_metrics(outcomes)` reports Hit Rate, MRR, and candidate recall for
+  rare, medium, and popular hidden targets.
+- `run_evaluation(...)` performs the chronological split, fits only on the
+  earlier period, creates shared one-SKU queries, evaluates baselines and
+  components, optionally searches four-signal weights, and writes metrics,
+  outcomes, bootstrap intervals, segments, queries, split details, selected
+  configuration, and run configuration.
+- `parse_args()` defines the data, output, split, frozen configuration, K,
+  candidate-pool size, query cap, seed, and bootstrap options.
+- `main()` is the console entry point used by
+  `odos-evaluate-product-page`.
+
+### `future_period_evaluation.py`
+
+Provides the only offline assessment path for the frozen TF-IDF candidate.
+
+- `strictly_future_orders(orders, cutoff)` retains only lines whose date is
+  later than the frozen serving cutoff.
+- `_ensure_empty_output(output_directory)` prevents a previous future run from
+  being overwritten or silently repeated.
+- `run_future_evaluation(...)` verifies configuration integrity, validates
+  independent dates and order IDs, fits on frozen history, evaluates every
+  eligible later order without tuning, and writes metrics, outcomes, intervals,
+  segments, queries, and data fingerprints.
+- `parse_args()` requires `--future` and exposes history, output, K,
+  candidate-pool, seed, and bootstrap settings—but no tuning options.
+- `main()` is the `odos-evaluate-future` console entry point.
 
 ### `phase6_analysis.py`
 
@@ -553,6 +693,29 @@ Contains Phase 5 retrieval, link prediction, metadata filtering, and blending.
   signals, and returns final cart recommendations.
 - `HybridRecommendationEngine` generalizes this to independently normalized
   co-purchase, Product2Vec, Adamic–Adar, and metadata scores with named weights.
+
+The production hybrid also accepts a `text` signal with the `text_score`
+column, backed by the TF-IDF model below.
+
+### `src/tfidf_recommender.py`
+
+Provides local product-name content similarity without an API or scikit-learn.
+
+- `PRODUCT_NAME_COLUMN` identifies the catalog text field used by the model.
+- `normalize_product_name(value)` applies Unicode NFKC normalization,
+  case-folding, punctuation removal, and whitespace normalization while
+  retaining multilingual letters and product-code digits.
+- `_ngrams(values, lower, upper)` yields contiguous word or character n-grams.
+- `TfidfNameRecommender.__init__(...)` configures 60% word and 40% character
+  channels, word 1–2 grams, and character 3–5 grams by default.
+- `_channel_counts(...)` counts one product name's features.
+- `_fit_channel(...)` calculates smoothed IDF, log-scaled term frequency,
+  L2-normalized sparse vectors, and an inverted feature index.
+- `fit(product_catalog)` builds both TF-IDF channels.
+- `similarity(left_sku, right_sku)` returns their weighted cosine similarity.
+- `_recommend_one(sku)` retrieves candidates through the sparse indexes.
+- `recommend_cart(cart_skus, top_n)` ranks by the maximum name similarity to
+  any query SKU; `recommend(sku, top_n)` is its one-SKU wrapper.
 
 ### `src/metadata_transfer_recommender.py`
 
@@ -718,6 +881,17 @@ Data Collection, Data Processing, Methodology and Algorithms, Experimental
 Setup, Results and Quantitative Analysis, and Discussion. Reported numbers are
 copied from the versioned Phase 4 and Phase 6 output artifacts.
 
+### `tests/test_tfidf_recommender.py`
+
+- Verifies Unicode-aware product-name normalization, nearest-name ranking,
+  cosine ordering, query-SKU exclusion, and empty output for missing names.
+
+### `tests/test_model_freeze_future.py`
+
+- Verifies the repository configuration hash, tamper detection, closed tuning
+  and historical-test guards, strict future-date filtering, and output
+  overwrite protection.
+
 ### Other files and directories
 
 - `data/Orders-Export-2026-June-07-2054.xlsx` is the source WooCommerce order
@@ -745,6 +919,15 @@ copied from the versioned Phase 4 and Phase 6 output artifacts.
 - `outputs/phase6/segment_errors.csv` compares popularity and cart-size groups.
 - `outputs/phase6/qualitative_samples.csv` contains metadata-enriched random
   examples and mismatch flags for manual inspection.
+- `outputs/single_sku_evaluation/development/` contains the dedicated
+  product-page model comparison, every one-SKU query and outcome, bootstrap
+  intervals, target-popularity segments, all 84 four-signal blends, the selected
+  product-page configuration, split summary, and exact run settings.
+- `outputs/single_sku_evaluation/development/model_freeze_manifest.json` locks
+  the configuration, query set, search table, cutoffs, weights, and selected
+  metrics with SHA-256 fingerprints.
+- `outputs/future_evaluation/` is intentionally empty until a genuinely newer
+  order export is evaluated; each run must use a new output directory.
 - `outputs/metadata_transfer/` contains development weight selection, overall
   and segment comparisons, rare-seed results, all paired predictions, and
   queries improved by transfer.
@@ -754,7 +937,11 @@ copied from the versioned Phase 4 and Phase 6 output artifacts.
   the frozen configuration, ablation and segment results, the one-time final
   test outcomes, bootstrap intervals, baseline comparison, and final plots.
 - `outputs/improvement_experiments/final/best_dev_configuration.json` is the
-  complete frozen configuration selected without test feedback.
+  historical 40/30/30 configuration selected without test feedback.
+- `outputs/single_sku_evaluation/development/best_product_page_configuration.json`
+  is the current serving configuration selected on the dedicated development
+  protocol; it assigns 40% to TF-IDF and has not been evaluated on the old test
+  set.
 - `outputs/improvement_experiments/final/final_test_results.csv` is also the
   guard file that prevents accidental repeat test evaluation.
 - `requirements.txt` lists the runtime packages. `openpyxl` reads Excel,

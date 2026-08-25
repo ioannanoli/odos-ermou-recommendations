@@ -8,8 +8,10 @@ import main
 import metadata_transfer_experiment
 import graph_visualizations
 import experiment_runner
+import future_period_evaluation
 import phase4_experiments
 import phase6_analysis
+import single_sku_evaluation
 import serve_recommendations
 import streamlit_app
 import visualization
@@ -23,9 +25,11 @@ class PackagingTests(unittest.TestCase):
         self.assertTrue(callable(main.main))
         self.assertTrue(callable(phase4_experiments.main))
         self.assertTrue(callable(phase6_analysis.main))
+        self.assertTrue(callable(single_sku_evaluation.main))
         self.assertTrue(callable(metadata_transfer_experiment.main))
         self.assertTrue(callable(graph_visualizations.main))
         self.assertTrue(callable(experiment_runner.main))
+        self.assertTrue(callable(future_period_evaluation.main))
         self.assertTrue(callable(visualization.main))
         self.assertTrue(callable(serve_recommendations.main))
         self.assertTrue(callable(streamlit_app.launch))
@@ -38,7 +42,8 @@ class PackagingTests(unittest.TestCase):
             set(project["scripts"]),
             {"odos-recommend", "odos-app", "odos-pipeline", "odos-tune", "odos-analyze",
              "odos-metadata-transfer", "odos-visualize", "odos-improve",
-             "odos-improvement-plots"},
+             "odos-improvement-plots", "odos-evaluate-product-page",
+             "odos-evaluate-future"},
         )
 
     def test_analytical_report_has_all_sections(self):

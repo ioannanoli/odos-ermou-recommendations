@@ -15,6 +15,7 @@ The project builds a local, reproducible recommendation system that:
 - discovers frequent product sets;
 - represents SKU relationships as a normalized co-purchase graph;
 - learns dense product embeddings from weighted Node2vec walks;
+- models Greek/English product-name content with word/character TF-IDF;
 - presents a combined one-SKU product-page recommendation shelf;
 - predicts missing links with Adamic–Adar;
 - supports metadata restrictions;

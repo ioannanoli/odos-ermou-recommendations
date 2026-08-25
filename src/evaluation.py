@@ -111,6 +111,97 @@ def evaluate_recommender(model, orders, k=10, max_queries=None, random_state=42)
     return metrics
 
 
+def single_sku_queries(orders, known_skus, max_queries=None, random_state=42):
+    """Create one reproducible viewed-SKU/hidden-target query per order.
+
+    Only products known to the fitted training catalog are eligible. Selecting
+    one directed pair per order prevents large baskets from contributing more
+    evaluation weight than small baskets.
+    """
+    known_skus = {str(sku) for sku in known_skus}
+    baskets = orders.groupby("Order ID")["SKU"].apply(
+        lambda values: sorted(set(values.dropna().astype(str)))
+    )
+    eligible = [
+        (str(order_id), [sku for sku in basket if sku in known_skus])
+        for order_id, basket in baskets.items()
+    ]
+    eligible = [(order_id, basket) for order_id, basket in eligible if len(basket) >= 2]
+    rng = np.random.default_rng(random_state)
+    queries = []
+    for order_id, basket in eligible:
+        selected = rng.choice(len(basket), size=2, replace=False)
+        queries.append({
+            "order_id": order_id,
+            "seed_sku": basket[int(selected[0])],
+            "target_sku": basket[int(selected[1])],
+            "held_out_basket_size": len(basket),
+        })
+    if max_queries is not None and len(queries) > max_queries:
+        chosen = np.sort(rng.choice(len(queries), size=max_queries, replace=False))
+        queries = [queries[index] for index in chosen]
+    return queries
+
+
+def evaluate_single_sku_engine(engine, queries, train_orders, catalog_skus,
+                               k=10, candidate_k=100):
+    """Evaluate product-page ranking from exactly one viewed SKU per query."""
+    if k < 1:
+        raise ValueError("k must be positive.")
+    if candidate_k < k:
+        raise ValueError("candidate_k must be greater than or equal to k.")
+    catalog_skus = {str(sku) for sku in catalog_skus}
+    popularity = train_orders.groupby("SKU")["Order ID"].nunique().to_dict()
+    recommended_catalog = set()
+    rows = []
+    for query in queries:
+        seed = str(query["seed_sku"])
+        target = str(query["target_sku"])
+        recommendations = engine.recommend([seed], top_n=candidate_k)
+        ranked = recommendations.get(
+            "recommended_sku", pd.Series(dtype=str)
+        ).astype(str).tolist()
+        top_k = ranked[:k]
+        candidate_rank = ranked.index(target) + 1 if target in ranked else 0
+        hit = int(target in top_k)
+        target_count = int(popularity.get(target, 0))
+        recommended_catalog.update(top_k)
+        rows.append({
+            **query,
+            "seed_sku": seed,
+            "target_sku": target,
+            "target_train_orders": target_count,
+            "popularity_segment": "rare" if target_count <= 2 else
+                                  "medium" if target_count <= 10 else "popular",
+            "top_prediction": top_k[0] if top_k else pd.NA,
+            "top_k_skus": " | ".join(top_k),
+            "recommendation_count": len(ranked),
+            "target_rank": candidate_rank,
+            "hit_at_k": hit,
+            "reciprocal_rank_at_k": (
+                1.0 / candidate_rank if 0 < candidate_rank <= k else 0.0
+            ),
+            "target_in_candidates": int(candidate_rank > 0),
+        })
+    outcomes = pd.DataFrame(rows)
+    count = len(outcomes)
+    hit_sum = outcomes["hit_at_k"].sum() if count else 0
+    summary = pd.DataFrame([{
+        "k": k,
+        "candidate_k": candidate_k,
+        "evaluated_queries": count,
+        "precision_at_k": hit_sum / (count * k) if count else 0.0,
+        "recall_at_k": outcomes["hit_at_k"].mean() if count else 0.0,
+        "hit_rate_at_k": outcomes["hit_at_k"].mean() if count else 0.0,
+        "mrr_at_k": outcomes["reciprocal_rank_at_k"].mean() if count else 0.0,
+        "candidate_recall": outcomes["target_in_candidates"].mean() if count else 0.0,
+        "catalog_coverage_at_k": (
+            len(recommended_catalog) / len(catalog_skus) if catalog_skus else 0.0
+        ),
+    }])
+    return summary, outcomes
+
+
 def split_summary(train, dev, test):
     """Return order/line/basket/date statistics for each chronological split."""
     rows = []

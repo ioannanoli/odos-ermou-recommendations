@@ -37,6 +37,40 @@ the three filtered policies. The original Product2Vec configuration won the
 
 ![Product2Vec search](../outputs/improvement_experiments/plots/product2vec_search.png)
 
+## Dedicated one-SKU product-page evaluation
+
+The historical frozen configuration was evaluated with one viewed SKU and one
+hidden partner per development order. Product-name TF-IDF was then added and
+84 four-signal blends were compared. The test split was not inspected.
+
+| Development model | Hit Rate@10 | MRR@10 | Candidate recall@100 | Coverage@10 |
+|---|---:|---:|---:|---:|
+| Global popularity | 0.092 | 0.029 | 0.197 | 0.002 |
+| Category popularity | 0.171 | 0.066 | 0.342 | 0.023 |
+| Co-purchase | 0.237 | 0.129 | 0.237 | 0.049 |
+| Product2Vec | 0.184 | 0.117 | 0.276 | 0.108 |
+| Metadata | 0.224 | 0.089 | 0.513 | 0.102 |
+| Product-name TF-IDF | 0.316 | 0.177 | 0.474 | 0.106 |
+| Historical 40/30/30 hybrid | 0.316 | 0.165 | 0.539 | 0.106 |
+| Tuned four-signal hybrid | **0.408** | **0.214** | **0.553** | **0.108** |
+
+The selected 40/10/10/40 hybrid retrieves 42 of 76 hidden partners in its first
+100 candidates and ranks 31 of 76 in the top ten. Its HR@10 bootstrap interval
+is 0.303–0.513. It adds eight hits and loses one relative to the 24-hit
+historical hybrid, a net gain of seven. The 11
+retrieved targets below rank ten still identify re-ranking as an improvement
+opportunity. These figures are development-selected and therefore require a
+new-period confirmation.
+
+The reported Product2Vec and four-signal results use deterministic sorted walk
+traversal. A separate-process reproduction returned the same metrics.
+
+These development results are now locked. Their configuration, queries, and
+weight-search files are hash-recorded in `model_freeze_manifest.json`; further
+tuning and reuse of the historical test period are blocked. No future-period
+result is reported because the current export ends at the frozen training
+cutoff.
+
 ## One-time frozen test result
 
 After settings were frozen, the selected model was refitted on
@@ -51,9 +85,9 @@ train+development and evaluated once on the 75 test queries.
 The final model retrieved 28 of 75 hidden products versus 22 for the original
 baseline.
 
-These figures evaluate the same frozen combined hybrid used by the single
-product-page shelf. However, 0.373 Hit Rate measures offline basket completion,
-not click-through, add-to-cart rate, conversion, or revenue on that shelf.
+These figures evaluate the historical 40/30/30 hybrid, not the newer TF-IDF
+product-page candidate. The 0.373 Hit Rate measures offline basket completion,
+not click-through, add-to-cart rate, conversion, or revenue.
 
 ![Final test comparison](../outputs/improvement_experiments/plots/final_baseline_comparison.png)
 

@@ -179,22 +179,27 @@ class HybridRecommendationEngine:
         "product2vec": "product2vec_score",
         "adamic_adar": "adamic_adar_score",
         "metadata": "metadata_score",
+        "text": "text_score",
     }
 
     def __init__(self, copurchase_model, product2vec_model, adamic_adar_model,
-                 product_catalog, weights=None, metadata_model=None):
+                 product_catalog, weights=None, metadata_model=None,
+                 text_model=None):
         weights = dict(weights or {"product2vec": 0.75, "adamic_adar": 0.25})
         unknown = set(weights).difference(self.SCORE_COLUMNS)
         if unknown or any(value < 0 for value in weights.values()) or sum(weights.values()) <= 0:
             raise ValueError(f"Invalid hybrid weights; supported signals: {sorted(self.SCORE_COLUMNS)}")
         if weights.get("metadata", 0) > 0 and metadata_model is None:
             raise ValueError("A metadata_model is required when metadata weight is positive.")
+        if weights.get("text", 0) > 0 and text_model is None:
+            raise ValueError("A text_model is required when text weight is positive.")
         total = sum(weights.values())
         self.weights = {name: weights.get(name, 0.0) / total for name in self.SCORE_COLUMNS}
         self.copurchase_model = copurchase_model
         self.product2vec_model = product2vec_model
         self.adamic_adar_model = adamic_adar_model
         self.metadata_model = metadata_model
+        self.text_model = text_model
         self.product_catalog = product_catalog
         self.graph = product2vec_model.graph
 
@@ -221,6 +226,7 @@ class HybridRecommendationEngine:
             "product2vec": self.product2vec_model,
             "adamic_adar": self.adamic_adar_model,
             "metadata": self.metadata_model,
+            "text": self.text_model,
         }
         combined = None
         for signal, score_column in self.SCORE_COLUMNS.items():

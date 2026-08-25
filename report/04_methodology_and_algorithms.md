@@ -27,6 +27,10 @@ behavior. A local Skip-Gram model with negative sampling learns normalized SKU
 vectors from center/context pairs. Exact cosine k-nearest-neighbor retrieval
 uses the normalized mean vector of known cart products.
 
+Nodes, neighbors, metadata memberships, and graph insertions are sorted before
+seeded sampling. This prevents Python set or graph insertion order from changing
+walks between separate processes with the same random seed.
+
 ## Adamic–Adar
 
 Missing graph links are scored through shared neighbors:
@@ -52,6 +56,20 @@ The engine min-max normalizes direct co-purchase, Product2Vec, Adamic–Adar, an
 metadata candidate scores independently before applying tunable top-level
 weights. Zero-weight sources are skipped. Candidate retrieval is cached during
 weight search so identical source rankings are not recomputed.
+
+## Product-name TF-IDF
+
+The fourth production signal is a dependency-free sparse TF-IDF model over
+`Product Name`. Names are Unicode-normalized and case-folded while letters and
+product-code digits are retained. One- and two-word features capture phrases;
+three- to five-character features handle spelling variants, Greek/English text,
+and related model codes. Smoothed inverse document frequency and log-scaled term
+frequency are L2-normalized. Candidate scores combine 60% word-vector cosine
+and 40% character-vector cosine. An inverted feature index avoids comparing
+every catalog pair.
+
+The multi-signal engine normalizes TF-IDF candidate scores in the same way as
+the behavioral and structured metadata signals.
 
 ## Heterogeneous metadata graph
 
@@ -79,8 +97,10 @@ unchanged architecture on all historical orders available at deployment time.
 The trained graph, embeddings, catalog, and hybrid are persisted as a trusted
 local pickle so serving queries do not retrain the model. The Streamlit product
 page uses one viewed SKU and presents one **Προϊόντα που μπορεί να σας αρέσουν**
-shelf. Its ranking is the frozen combined model: 40% direct co-purchase, 30%
-Product2Vec, and 30% structured metadata. Recommendations can be restricted to
+shelf. Its current development-selected ranking is 40% direct co-purchase, 10%
+Product2Vec, 10% structured metadata, and 40% product-name TF-IDF.
+Recommendations can be restricted to
 a current inventory SKU list, optionally filtered by metadata, and enriched
 with catalog fields. The serving workflow does not rerun or modify the
-historical test evaluation.
+historical test evaluation. The previous 40/30/30 test result remains a
+historical comparison and is not relabeled as evidence for the TF-IDF model.

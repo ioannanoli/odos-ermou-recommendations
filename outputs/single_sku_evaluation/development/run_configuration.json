@@ -1,0 +1,30 @@
+{
+  "protocol": "one reproducibly sampled directed SKU pair per eligible order",
+  "split": "development",
+  "training_orders": 6808,
+  "evaluation_orders": 1459,
+  "eligible_queries": 76,
+  "k": 10,
+  "candidate_k": 100,
+  "max_queries": null,
+  "random_state": 42,
+  "bootstrap_samples": 2000,
+  "config_path": "outputs\\improvement_experiments\\final\\best_dev_configuration.json",
+  "models": [
+    "global_popularity",
+    "category_popularity",
+    "copurchase",
+    "product2vec",
+    "metadata",
+    "tfidf_name",
+    "frozen_hybrid",
+    "tuned_four_signal"
+  ],
+  "tuned_weights": {
+    "copurchase": 0.4,
+    "product2vec": 0.1,
+    "metadata": 0.1,
+    "text": 0.4
+  },
+  "weight_step": 0.1
+}

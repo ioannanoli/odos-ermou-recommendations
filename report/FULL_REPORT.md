@@ -15,21 +15,25 @@ an online toy shop. The system learns from 14,178 historical order lines,
 representing 9,727 orders and 6,257 products, collected between April 2019 and
 June 2026. Products are represented as nodes in a weighted co-purchase graph.
 The project combines direct co-purchase evidence, Node2vec-style product
-embeddings learned with Skip-Gram and negative sampling, and structured content
-metadata such as category, brand, age, hero, and gender. A chronological
+embeddings learned with Skip-Gram and negative sampling, structured content
+metadata, and word/character TF-IDF similarity over product names. A chronological
 train/development/test protocol protects the final evaluation from model-
 selection leakage.
 
-The selected model assigns 40% of its score to direct co-purchase evidence, 30%
-to Product2Vec, and 30% to metadata similarity. It improves Hit Rate@10 from
+The historical test-frozen model assigns 40% of its score to direct co-purchase
+evidence, 30% to Product2Vec, and 30% to metadata similarity. It improves Hit Rate@10 from
 0.293 to 0.373, MRR@10 from 0.112 to 0.154, and catalog coverage from 0.068 to
 0.076 on the one-time test set of 75 eligible basket-completion queries. Rare-
 product Hit Rate@10 rises from 0.108 to 0.162, although this remains the main
-weakness. The final system is packaged as a persisted local model and a
+weakness. A subsequent development-only product-page experiment adds TF-IDF.
+The selected 40% co-purchase, 10% Product2Vec, 10% metadata, and 40% TF-IDF
+blend raises dedicated one-SKU development HR@10 from 0.316 to 0.408 and MRR@10
+from 0.165 to 0.214. This candidate has not been reevaluated on the old test
+period. The final system is packaged as a persisted local model and a
 Streamlit product-page interface with one combined **Προϊόντα που μπορεί να σας
 αρέσουν** shelf, inventory restrictions, score explanations, and CSV export.
-The reported test figures evaluate the same combined hybrid used by this shelf,
-although online customer impact still requires separate measurement. No
+The Streamlit shelf uses the new four-signal candidate; the older test figures
+remain explicitly historical. Online customer impact still requires separate measurement. No
 external API or personal customer profile is required.
 
 ## Table of Contents
@@ -242,6 +246,10 @@ This is an **NLP-inspired architecture**, not conventional text-language
 understanding. The tokens are product and metadata nodes rather than words from
 descriptions. The distinction is important for accurate reporting.
 
+Seeded reproducibility also requires deterministic traversal. Product nodes,
+neighbors, metadata memberships, and graph insertions are sorted so Python set
+or insertion order cannot change walks across separate processes.
+
 #### Adamic–Adar link prediction
 
 Adamic–Adar scores an unobserved link through shared graph neighbors, giving
@@ -271,23 +279,35 @@ co-purchase. Their weight is divided by the square root of metadata-node degree,
 reducing the influence of broad hubs such as a common age group. Random walks
 may traverse all node types, but the recommender returns product SKUs only.
 
+#### Product-name TF-IDF
+
+Product names are Unicode-normalized and case-folded while preserving letters
+and product-code digits. The model builds word 1–2 grams and character 3–5
+grams, calculates smoothed inverse document frequency with log-scaled term
+frequency, and L2-normalizes sparse vectors. Similarity combines 60% word
+cosine and 40% character cosine. The word channel captures phrases and brands;
+the character channel handles Greek/English spelling variation and related
+model codes. An inverted feature index provides retrieval without a full
+catalog-to-catalog comparison.
+
 #### Final hybrid and software system
 
 Each candidate source is min-max normalized before blending:
 
 ```text
 final_score = 0.40 × co-purchase
-            + 0.30 × Product2Vec
-            + 0.30 × metadata
+            + 0.10 × Product2Vec
+            + 0.10 × metadata
+            + 0.40 × TF-IDF product-name similarity
             + 0.00 × Adamic–Adar
 ```
 
 The frozen configuration is refitted on all approved history for deployment and
 saved as a trusted local model. A Streamlit product page exposes one-SKU search,
 inventory uploads, score components, and CSV download. Its single **Προϊόντα που
-μπορεί να σας αρέσουν** shelf uses the frozen final score: 40% direct
-co-purchase, 30% Product2Vec, and 30% metadata. The interface does not retrain
-or reevaluate the test set.
+μπορεί να σας αρέσουν** shelf uses the development-selected four-signal score.
+The interface does not retrain or reevaluate the test set. The old 40/30/30
+test configuration remains preserved separately.
 
 ## 3. Experiments: Setup and Configuration
 
@@ -321,6 +341,16 @@ This basket-completion task is an offline proxy for learning and comparing
 signals; it does not mean recommendations are placed on the cart page. The live
 interface starts from one viewed product and uses the same selected combined
 hybrid in one recommendation shelf.
+
+To measure that interface more directly, a dedicated protocol evaluates the
+already-frozen configuration on development orders using exactly one viewed
+SKU and one hidden partner per order. Both must exist in the training catalog,
+and every eligible order receives equal weight. The same queries are used for
+global popularity, category popularity, co-purchase, Product2Vec, metadata,
+TF-IDF, and the hybrid. A coarse 0.10-step simplex search compares 84 blends in
+which all four production signals stay active. Candidate recall@100
+distinguishes retrieval failures from top-ten ranking failures. The default
+command does not inspect the test split.
 
 ### 3.3 Controlled model selection
 
@@ -358,9 +388,27 @@ test evaluation.
 | Epochs | 2 |
 | Learning rate | 0.05 |
 | Node2vec `p`, `q` | 1.0, 1.0 |
-| Final blend | Co-purchase 0.40; P2V 0.30; metadata 0.30; AA 0.00 |
+| Historical test blend | Co-purchase 0.40; P2V 0.30; metadata 0.30; AA 0.00 |
+| Product-page blend | Co-purchase 0.40; P2V 0.10; metadata 0.10; TF-IDF 0.40 |
+| TF-IDF channels | Word 0.60; character 0.40 |
+| TF-IDF n-grams | Words 1–2; characters 3–5 |
 
-### 3.5 Metrics
+### 3.5 Model freeze and next assessment
+
+The product-page candidate was frozen on 25 August 2026. Its manifest records
+SHA-256 fingerprints for the selected configuration, fixed 76-query set, and
+complete weight-search table. It also fixes the serving training cutoff at
+19 June 2026, 14:28:25. Configuration integrity is checked before training or
+serving. Further tuning on the development queries and reuse of the historical
+test period are rejected by code.
+
+The next valid offline estimate must use every eligible order strictly later
+than the cutoff, with no overlapping order IDs and no weight changes. The
+future-period command has no tuning mode and refuses to overwrite an existing
+result directory. Alternatively, a preregistered online product-page experiment
+can measure interaction outcomes.
+
+### 3.6 Metrics
 
 Top-N recommendation should be evaluated as a ranking task rather than only as
 a classification loss [5]. The project reports:
@@ -418,7 +466,27 @@ won the expanded 20-candidate search.
 
 ![Product2Vec random search](../outputs/improvement_experiments/plots/product2vec_search.png)
 
-### 4.3 One-time test result
+### 4.3 Dedicated one-SKU product-page evaluation
+
+| Development model | HR@10 | MRR@10 | Candidate recall@100 | Coverage@10 |
+|---|---:|---:|---:|---:|
+| Global popularity | 0.092 | 0.029 | 0.197 | 0.002 |
+| Category popularity | 0.171 | 0.066 | 0.342 | 0.023 |
+| Co-purchase | 0.237 | 0.129 | 0.237 | 0.049 |
+| Product2Vec | 0.184 | 0.117 | 0.276 | 0.108 |
+| Metadata | 0.224 | 0.089 | 0.513 | 0.102 |
+| Product-name TF-IDF | 0.316 | 0.177 | 0.474 | 0.106 |
+| Historical 40/30/30 hybrid | 0.316 | 0.165 | 0.539 | 0.106 |
+| Tuned four-signal hybrid | **0.408** | **0.214** | **0.553** | **0.108** |
+
+The selected hybrid retrieves 42 of 76 targets in its first 100 candidates and
+ranks 31 in the first ten. Its HR@10 bootstrap interval is 0.303–0.513. It adds
+eight hits and loses one relative to the 24-hit historical hybrid. Eleven retrieved targets
+remain below rank ten, making re-ranking a clear improvement target. Because
+the blend was selected on these same development queries, this is selection
+evidence rather than an unbiased final estimate.
+
+### 4.4 One-time test result
 
 | Model | Precision@10 | Recall/HR@10 | MRR@10 | Coverage@10 |
 |---|---:|---:|---:|---:|
@@ -431,14 +499,14 @@ original baseline. Thus, six additional test baskets contain their hidden item
 in the first ten positions. MRR also rises, suggesting that hits tend to occur
 earlier, not merely somewhere near position ten.
 
-The 0.373 Hit Rate belongs to the combined 40/30/30 hybrid used by the product
-page, but it was measured under offline basket completion. It must not be
+The 0.373 Hit Rate belongs to the historical 40/30/30 hybrid, not the current
+TF-IDF product-page candidate. It was measured under offline basket completion and must not be
 presented as product-page click-through or conversion performance; those require
 future-period or online measurement.
 
 ![One-time final comparison](../outputs/improvement_experiments/plots/final_baseline_comparison.png)
 
-### 4.4 Segment analysis
+### 4.5 Segment analysis
 
 | Segment type | Segment | Queries | HR@10 | MRR@10 |
 |---|---|---:|---:|---:|
@@ -458,7 +526,7 @@ has only three queries, so its zero score is not a stable estimate.
 
 ![Hit Rate by cart size](../outputs/improvement_experiments/plots/hit_rate_by_cart_size.png)
 
-### 4.5 Statistical stability
+### 4.6 Statistical stability
 
 | Metric | Point estimate | 95% bootstrap interval |
 |---|---:|---:|
@@ -470,7 +538,7 @@ The intervals are wide because only 75 independent query orders are available.
 The improvement is promising, but the experiment does not establish that the
 same effect size will hold for future customers or assortments.
 
-### 4.6 Graph visualization
+### 4.7 Graph visualization
 
 Plotting all nodes and edges would be unreadable. The report therefore shows a
 100-edge backbone and bounded local ego networks. Node size reflects degree,
@@ -554,6 +622,12 @@ similar products. Time decay places more emphasis on the current assortment.
 The heterogeneous graph helps only when metadata edges are lightly weighted and
 hub-corrected.
 
+Product-name TF-IDF supplies an interpretable fourth signal. It outperforms the
+three earlier individual components on the dedicated one-SKU development task,
+and the four-signal blend improves HR@10 from 0.316 to 0.408. The improvement
+must still be confirmed on new data because the blend was selected on the same
+76 development queries used to report it.
+
 All-status training won on development data. This implies that cancelled and
 pending baskets retain some useful intent in this export, but the conclusion is
 specific to the dataset. A change in shop processes or status definitions could
@@ -583,18 +657,17 @@ tested algorithm.
 
 ### 6.3 Future work
 
-1. **Text content analysis.** Build a TF-IDF baseline from Greek/English product
-   names and category paths. TF-IDF is interpretable and provides a defensible
-   text-retrieval baseline [8]. Compare its nearest neighbors and rare-item
-   performance with structured metadata and Product2Vec.
+1. **Extend text content.** The product-name TF-IDF baseline is complete. Add
+   cleaned category paths or descriptions as separately weighted fields and
+   compare them on a new development period rather than the current 76 queries.
 2. **Cold-start routing.** Use content similarity when an SKU has no graph
    history, then shift weight toward behavior as orders accumulate.
 3. **Data enrichment.** Improve brand, age, hero, and gender coverage and add
    price, margin, availability, and product lifecycle.
 4. **Session data.** Collect views, searches, clicks, add-to-cart actions, and
    sequence timestamps to distinguish interest from completed purchase.
-5. **New-period validation.** Freeze the current system and evaluate on later
-   orders without changing settings.
+5. **New-period validation.** The system is now frozen. Evaluate it on orders
+   strictly later than 19 June 2026 without changing settings after results.
 6. **Online experiment.** Compare the combined product-page shelf with the
    current shop logic and record click-through, add-to-cart rate, conversion,
    and revenue.
@@ -607,13 +680,14 @@ tested algorithm.
 ### 6.4 Conclusion
 
 The project demonstrates that a relatively small and sparse retail dataset can
-support a reproducible graph-and-content recommender. The selected hybrid raises
-test HR@10 by eight percentage points and retrieves six additional held-out
-products while improving rank quality, coverage, and rare-product results. The
-system is sufficiently mature for local demonstration, but the limited final
-sample and absence of online feedback require cautious interpretation. The next
-academic improvement should emphasize interpretable text content analysis and
-future-period evidence rather than simply adding a larger model.
+support a reproducible graph-and-content recommender. The historical hybrid
+raises test HR@10 by eight percentage points and retrieves six additional
+held-out products. The later TF-IDF product-page candidate raises development
+HR@10 from 0.316 to 0.408, adding eight hits while losing one. The
+system is sufficiently mature for local demonstration, but the limited samples
+and absence of online feedback require cautious interpretation. The next
+academic priority is new-period evidence rather than another round of tuning on
+the same development orders.
 
 ## 7. Members and Roles
 
@@ -648,7 +722,9 @@ with course dates if required.
 | Week 10 | Content integration | Metadata similarity and heterogeneous graph | Complete |
 | Week 11 | Final evaluation | Frozen test result, intervals, plots | Complete |
 | Week 12 | Deployment and reporting | Product-page Streamlit UI, final report | Complete |
-| Next iteration | Text content extension | TF-IDF baseline and new-period evaluation | Planned |
+| Week 13 | Text content extension | TF-IDF baseline and four-signal product-page blend | Complete |
+| 25 Aug 2026 | Model freeze | Hash-locked configuration and closed tuning/test periods | Complete |
+| Next iteration | New-period validation | Confirm TF-IDF blend without retuning | Waiting for newer orders |
 
 ## 9. Bibliography
 
@@ -701,6 +777,20 @@ Run the tests:
 python -m unittest discover -s tests -v
 ```
 
+Reproduce the locked dedicated one-SKU metrics without model selection:
+
+```powershell
+python single_sku_evaluation.py
+```
+
+Evaluate once a genuinely newer export is available:
+
+```powershell
+python future_period_evaluation.py `
+  --future data/Orders-Export-NEW.xlsx `
+  --output outputs/future_evaluation/NEW-PERIOD
+```
+
 Train the frozen deployment model on all available history:
 
 ```powershell
@@ -723,12 +813,16 @@ python visualization.py --center-sku IT16951
 
 | Artifact | Purpose |
 |---|---|
-| `outputs/improvement_experiments/final/best_dev_configuration.json` | Frozen development-selected configuration |
+| `outputs/improvement_experiments/final/best_dev_configuration.json` | Historical test-frozen 40/30/30 configuration |
 | `outputs/improvement_experiments/final/final_test_results.csv` | One-time aggregate test metrics |
 | `outputs/improvement_experiments/final/final_test_outcomes.csv` | Per-query ranks and hits |
 | `outputs/improvement_experiments/final/final_test_segments.csv` | Popularity and cart-size results |
 | `outputs/improvement_experiments/final/bootstrap_intervals.csv` | Query-bootstrap uncertainty intervals |
 | `outputs/improvement_experiments/plots/` | Versioned result and graph visualizations |
+| `outputs/single_sku_evaluation/development/best_product_page_configuration.json` | Current four-signal serving configuration |
+| `outputs/single_sku_evaluation/development/four_signal_weight_search.csv` | All 84 product-page development blends |
+| `outputs/single_sku_evaluation/development/model_freeze_manifest.json` | Hashes, cutoffs, locked metrics, and closed-tuning declaration |
+| `future_period_evaluation.py` | No-tuning assessment for orders strictly after the cutoff |
 | `models/final_recommender.pkl` | Local trusted deployment artifact; excluded from Git |
 
 ### Appendix C: Metric definitions

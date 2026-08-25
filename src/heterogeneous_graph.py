@@ -55,14 +55,14 @@ def build_heterogeneous_graph(product_graph, product_catalog,
         for relation, column in METADATA_RELATIONS.items():
             for token in metadata_tokens(row[column]):
                 memberships[(relation, token)].add(sku)
-    for (relation, token), skus in memberships.items():
+    for (relation, token), skus in sorted(memberships.items()):
         if not skus or weights[relation] == 0:
             continue
         metadata_id = f"{relation}::{token}"
         graph.add_node(metadata_id, node_type=relation, value=token,
                        order_count=1, weighted_order_count=1.0)
         edge_weight = weights[relation] / sqrt(len(skus))
-        for sku in skus:
+        for sku in sorted(skus):
             graph.add_edge(product_node(sku), metadata_id, weight=edge_weight,
                            relation=f"has_{relation}", count=1, weighted_count=1.0)
     graph.graph.update({"relationship_weights": weights, "heterogeneous": True})

@@ -31,7 +31,7 @@ The original Product2Vec settings remained the best candidate: 48 dimensions,
 walk length 8, two walks per node, window 3, two negative samples, two epochs,
 learning rate 0.05, and `p = q = 1`.
 
-The frozen architecture uses all statuses, the unpruned cosine graph, direct
+The historical test-frozen architecture uses all statuses, the unpruned cosine graph, direct
 confidence ranking, a six-month half-life, and a weighted heterogeneous graph.
 Its final blend is 40% direct co-purchase, 30% Product2Vec, 30% metadata
 similarity, and 0% Adamic–Adar. Metadata relationship weights are 0.05 each for
@@ -56,9 +56,38 @@ prediction.
 
 ## Relationship to product-page serving
 
-Basket completion is the offline proxy used to select and compare the fitted
+Basket completion was the offline proxy used to select and compare the fitted
 signals. Deployment places one combined recommendation shelf on a single
-product page rather than on a cart page. The interface uses the same 40/30/30
-hybrid evaluated above, starting from one viewed SKU. Its live business effect
-must still be measured on future data or in an A/B test because offline basket
-completion does not measure customer interaction.
+product page rather than on a cart page.
+
+A separate product-page protocol now fits on the training period and evaluates
+the already-frozen configuration on development orders. Each eligible order
+contributes exactly one reproducibly selected directed pair: one viewed SKU and
+one hidden basket partner. Both must be known to the training catalog. This
+prevents large baskets from receiving more evaluation weight and ensures every
+query has exactly one SKU, matching the interface. The same 76 queries compare
+global popularity, category popularity, co-purchase, Product2Vec, metadata, and
+product-name TF-IDF. It also compares the historical hybrid with 84 coarse
+four-signal blends in 0.10 increments; all four signals must remain active.
+Candidate recall@100 is recorded to separate retrieval
+failures from top-ten ranking failures. The test split is not used by the
+default command.
+
+The selected product-page candidate is 40% co-purchase, 10% Product2Vec, 10%
+structured metadata, and 40% TF-IDF. This configuration is selected and
+reported on development data only. The previous test split is not reopened.
+
+On 25 August 2026, the candidate was frozen. A freeze manifest records the
+SHA-256 hashes of its configuration, 76 development queries, and complete
+84-row weight search, plus the training cutoff of 19 June 2026 at 14:28:25.
+Serving verifies the configuration hash before fitting. The development command
+now rejects further tuning and rejects reopening the historical test split.
+
+The preregistered next offline assessment uses the unchanged model and every
+eligible order strictly later than that cutoff. It rejects overlapping order
+IDs, later rows in training history, altered configuration bytes, and reused
+output directories. No hyperparameter or weight-selection option is available
+in the future-period evaluator.
+
+Its live business effect must still be measured on future data or in an A/B
+test because offline co-occurrence does not measure customer interaction.

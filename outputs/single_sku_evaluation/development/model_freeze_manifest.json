@@ -1,0 +1,30 @@
+{
+  "freeze_version": 1,
+  "status": "frozen",
+  "frozen_at": "2026-08-25T21:02:24.0645736+03:00",
+  "configuration_path": "outputs/single_sku_evaluation/development/best_product_page_configuration.json",
+  "configuration_sha256": "c7d5f35f7f78029b9db201bcf740782c1b9dc84c7c0b0bc7bdda66fd95cac9ac",
+  "development_queries_path": "outputs/single_sku_evaluation/development/queries.csv",
+  "development_queries_sha256": "aff317357e1cd34e98b3e10f2370bf51c02af2fb574dd1a20f2b4b955719ad31",
+  "weight_search_path": "outputs/single_sku_evaluation/development/four_signal_weight_search.csv",
+  "weight_search_sha256": "b4bcf4b8b00d2b6e5401341eeaad56d052874ec8838ebb2f153468fd780a04a1",
+  "development_query_count": 76,
+  "selection_period_end": "2025-08-21T06:48:08",
+  "serving_training_cutoff": "2026-06-19T14:28:25",
+  "future_evaluation_must_start_after": "2026-06-19T14:28:25",
+  "tuning_closed": true,
+  "historical_test_reopened": false,
+  "selected_weights": {
+    "copurchase": 0.4,
+    "product2vec": 0.1,
+    "metadata": 0.1,
+    "text": 0.4
+  },
+  "locked_development_metrics": {
+    "hit_rate_at_10": 0.40789473684210525,
+    "mrr_at_10": 0.21439536340852128,
+    "candidate_recall_at_100": 0.5526315789473685,
+    "catalog_coverage_at_10": 0.10798415676464457
+  },
+  "next_valid_model_assessment": "Orders strictly later than the serving training cutoff, or a preregistered online product-page experiment"
+}

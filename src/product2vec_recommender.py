@@ -35,7 +35,7 @@ class Product2VecRecommender:
         self._cart_cache = {}
 
     def _next_node(self, previous, current, rng):
-        neighbors = list(self.graph.neighbors(current))
+        neighbors = sorted(self.graph.neighbors(current))
         if not neighbors:
             return None
         weights = []
@@ -59,7 +59,7 @@ class Product2VecRecommender:
         if self.graph is None:
             raise RuntimeError("Fit the model before generating walks.")
         rng = np.random.default_rng(self.random_state)
-        nodes = [node for node in self.graph if self.graph.degree(node) > 0]
+        nodes = sorted(node for node in self.graph if self.graph.degree(node) > 0)
         walks = []
         for _ in range(self.walks_per_node):
             for start in rng.permutation(nodes):

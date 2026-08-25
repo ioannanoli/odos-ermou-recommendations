@@ -54,12 +54,29 @@ class StreamlitAppTests(unittest.TestCase):
             "copurchase_score": [1.0],
             "product2vec_score": [0.7],
             "metadata_score": [0.6],
+            "text_score": [0.5],
         })
         result = streamlit_app.prepare_results(source)
         self.assertTrue({
             "recommendation_score", "copurchase_score", "product2vec_score",
             "metadata_score",
+            "text_score",
         }.issubset(result.columns))
+
+    def test_score_chart_contains_components_but_not_final_score(self):
+        self.assertEqual(
+            set(streamlit_app.COMBINED_SCORE_FIELDS.values()),
+            {"copurchase_score", "product2vec_score", "metadata_score",
+             "text_score"},
+        )
+
+    def test_score_formula_uses_active_weights(self):
+        formula = streamlit_app.score_formula({
+            "copurchase": 0.3, "product2vec": 0.2,
+            "metadata": 0.2, "text": 0.3, "adamic_adar": 0.0,
+        })
+        self.assertIn("30% TF-IDF product-name similarity", formula)
+        self.assertNotIn("Adamic", formula)
 
     def test_query_signature_changes_with_inventory_and_filters(self):
         base = streamlit_app.query_signature("0012", 10, {}, None)

@@ -14,13 +14,13 @@ from src.copurchase_recommender import CoPurchaseRecommender
 from src.data_loader import create_product_catalog
 from src.heterogeneous_graph import HeterogeneousProduct2VecRecommender
 from src.metadata_recommender import MetadataSimilarityRecommender
+from src.model_freeze import (DEFAULT_CONFIG_PATH, HISTORICAL_TEST_CONFIG_PATH,
+                              verify_frozen_configuration)
 from src.product2vec_recommender import Product2VecRecommender
 from src.recommendation_engine import AdamicAdarRecommender, HybridRecommendationEngine
+from src.tfidf_recommender import TfidfNameRecommender
 
 
-DEFAULT_CONFIG_PATH = Path(
-    "outputs/improvement_experiments/final/best_dev_configuration.json"
-)
 REQUIRED_CONFIG_KEYS = {
     "random_seed", "allowed_statuses", "graph", "product2vec",
     "blend_weights", "metadata_field_weights", "architecture",
@@ -32,6 +32,8 @@ def load_frozen_configuration(path=DEFAULT_CONFIG_PATH):
     path = Path(path)
     if not path.exists():
         raise FileNotFoundError(f"Frozen model configuration not found: {path}")
+    if path.resolve() == DEFAULT_CONFIG_PATH.resolve():
+        verify_frozen_configuration(path)
     configuration = json.loads(path.read_text(encoding="utf-8"))
     missing = REQUIRED_CONFIG_KEYS.difference(configuration)
     if missing:
@@ -105,12 +107,16 @@ class FinalRecommender:
         metadata = MetadataSimilarityRecommender(
             field_weights=self.configuration["metadata_field_weights"]
         ).fit(catalog)
+        text_model = TfidfNameRecommender(
+            **self.configuration.get("tfidf", {})
+        ).fit(catalog)
         adamic_adar = None
         if self.configuration["blend_weights"].get("adamic_adar", 0) > 0:
             adamic_adar = AdamicAdarRecommender().fit(graph=copurchase.graph)
         self.engine = HybridRecommendationEngine(
             copurchase, product2vec, adamic_adar, catalog,
             weights=self.configuration["blend_weights"], metadata_model=metadata,
+            text_model=text_model,
         )
         self.product_catalog = catalog
         dates = pd.to_datetime(training["Order Date"], errors="raise")
@@ -173,6 +179,7 @@ class FinalRecommender:
             self.product_catalog,
             weights=weights,
             metadata_model=self.engine.metadata_model,
+            text_model=self.engine.text_model,
         )
 
     def recommend_frequently_bought_together(
@@ -191,7 +198,9 @@ class FinalRecommender:
         metadata_filters=None, enrich=True,
     ):
         """Rank product substitutes using embeddings and structured content."""
-        engine = self._view_engine({"product2vec": 0.5, "metadata": 0.5})
+        engine = self._view_engine({
+            "product2vec": 0.4, "metadata": 0.3, "text": 0.3
+        })
         return self._recommend_with_engine(
             engine, [sku], top_n, available_skus, metadata_filters, enrich,
         )
@@ -200,6 +209,9 @@ class FinalRecommender:
         """Persist a locally trained model. Only load trusted pickle files."""
         if self.engine is None:
             raise RuntimeError("Fit the final recommender before saving it.")
+        if self.configuration.get("selection_split") == "development_single_sku":
+            if self.configuration != load_frozen_configuration(DEFAULT_CONFIG_PATH):
+                raise RuntimeError("Refusing to save a model that differs from the freeze.")
         path = Path(path)
         path.parent.mkdir(parents=True, exist_ok=True)
         with path.open("wb") as stream:
@@ -216,4 +228,7 @@ class FinalRecommender:
             model = pickle.load(stream)
         if not isinstance(model, cls):
             raise TypeError("The model artifact is not a FinalRecommender.")
+        if model.configuration.get("selection_split") == "development_single_sku":
+            if model.configuration != load_frozen_configuration(DEFAULT_CONFIG_PATH):
+                raise RuntimeError("Saved model configuration differs from the freeze.")
         return model
