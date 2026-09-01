@@ -1,0 +1,18 @@
+component,parameter,value,description
+graph,weighting,cosine,Symmetric edge-weight formula used by graph walks
+graph,ranking,confidence,Directional score used by direct co-purchase ranking
+graph,min_pair_count,1,Minimum raw co-purchase count retained
+graph,half_life_months,6.0,Recency-decay half-life
+product2vec,n_components,48,Embedding-vector dimensions
+product2vec,walk_length,8,Maximum nodes per random walk
+product2vec,walks_per_node,2,Random walks started per node
+product2vec,window_size,3,Skip-Gram context radius
+product2vec,negative_samples,2,Negative contexts per positive context
+product2vec,epochs,2,Skip-Gram training passes
+product2vec,learning_rate,0.05,Initial Skip-Gram learning rate
+node2vec,p,1.0,Return parameter
+node2vec,q,1.0,In-out exploration parameter
+tfidf,word_weight,0.60,Weight of word TF-IDF channel
+tfidf,char_weight,0.40,Weight of character TF-IDF channel
+tfidf,word_ngram_range,1-2,Word unigram and bigram range
+tfidf,char_ngram_range,3-5,Character n-gram range

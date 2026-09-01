@@ -90,6 +90,21 @@ query role, while edge width represents normalized co-purchase weight.
 
 ![Selected graph ego network](../outputs/improvement_experiments/plots/selected_graph_ego_IT16951.png)
 
+## Experimental logistic ranker
+
+The learned-score experiment uses L2-regularized pointwise logistic regression
+implemented with NumPy and Newton updates. Each candidate has 28 past-only
+features covering normalized component scores, raw pair evidence, directional
+confidence, seed/candidate popularity and recency, graph degree, five metadata
+matches, source provenance, missing signals, and behavioral-reliability
+interactions. Positive labels are later products purchased with a seed; hard
+negatives are retrieved candidates absent from that basket. Features are
+standardized and positive/negative class mass is balanced during fitting.
+
+Logistic probability replaces only the ordering formula. Both fixed and
+learned rankers receive the same expanded candidate pool, so full-pool recall
+is an explicit control for retrieval differences.
+
 ## Serving interface
 
 `FinalRecommender` loads the frozen development-selected JSON and refits that
@@ -104,3 +119,14 @@ a current inventory SKU list, optionally filtered by metadata, and enriched
 with catalog fields. The serving workflow does not rerun or modify the
 historical test evaluation. The previous 40/30/30 test result remains a
 historical comparison and is not relabeled as evidence for the TF-IDF model.
+
+For submission, exact final configurations and readable scalar-weight tables
+are stored in `model_configs/`. Offline search, evaluation, audit, and plotting
+programs are isolated in the `experiments/` package, while production entry
+points remain in the repository root and reusable implementations remain in
+`src/`.
+
+Selected scalar weights and hyperparameters are not the same as learned
+parameters. The final fitted co-purchase edge table and retained normalized
+Node2vec matrix are exported under `model_weights/`; their row counts and
+SHA-256 hashes are recorded in `export_manifest.json`.

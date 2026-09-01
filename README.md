@@ -1,7 +1,7 @@
 # Odos Ermou Toy Recommendation System
 
-This project implements the first six phases of a local recommendation
-pipeline: cleaning order data, mining frequent baskets, constructing a
+This project implements a complete local recommendation pipeline: cleaning
+order data, mining frequent baskets, constructing a
 co-purchase graph, generating Node2vec random walks, training product
 embeddings with Skip-Gram negative sampling, and running chronological model
 evaluation with random hyperparameter search, and a cart recommendation engine
@@ -13,7 +13,7 @@ similarity, heterogeneous metadata walks, bootstrap intervals, and final plots.
 
 No API key or external service is required. All processing runs locally.
 
-The raw order workbook is intentionally excluded from Git because order exports
+Raw order workbooks and CSV exports are intentionally excluded from Git because order exports
 may contain customer or location information. After cloning the repository,
 place the workbook at `data/Orders-Export-2026-June-07-2054.xlsx`, or pass a
 different path to the relevant pipeline function/command.
@@ -27,17 +27,38 @@ dependencies:
 python -m pip install -r requirements.txt
 ```
 
-Alternatively, install the project and its eleven console commands in editable
+Alternatively, install the project and its fourteen console commands in editable
 mode:
 
 ```powershell
 python -m pip install -e .
 ```
 
+To include the optional Word-report builder with an editable installation, use
+`python -m pip install -e ".[report]"`.
+
 This provides `odos-app`, `odos-recommend`, `odos-pipeline`, `odos-tune`, `odos-analyze`,
 `odos-metadata-transfer`, `odos-visualize`, `odos-improve`, and
 `odos-improvement-plots`, `odos-evaluate-product-page`, and
-`odos-evaluate-future`.
+`odos-evaluate-future`, `odos-expanded-candidates`, `odos-candidate-health`, and
+`odos-logistic-backtest`.
+
+## Submission layout and final weights
+
+Normal use is intentionally limited to `main.py`, `serve_recommendations.py`,
+and `streamlit_app.py` in the repository root. Reusable implementation code is
+under `src/`; all offline searches, evaluations, audits, and plotting programs
+are under `experiments/`.
+
+The selected models are summarized in `model_configs/model_registry.json`.
+The current serving model is `model_configs/final_product_page_model.json`, and
+its readable scalar weights are in
+`model_configs/final_product_page_weights.csv`. The earlier historical
+basket-completion model and its weights are preserved separately for accurate
+reporting. These configuration and CSV files contain the selected scoring
+weights. Graph/Node2vec/TF-IDF settings are in
+`model_configs/final_model_hyperparameters.csv`; fitted graph edges and
+Node2vec vectors are exported under `model_weights/`.
 
 ## Train and use the final model
 
@@ -64,8 +85,8 @@ CSV or Excel uploads, optional metadata filters, score explanations, and UTF-8
 CSV download. It runs locally and does not need an API key.
 
 The 0.373 test HR reported below belongs to the earlier 40/30/30 frozen model.
-The TF-IDF extension has development-only evidence and must be evaluated on a
-new future period before receiving a final test claim. Neither offline result
+The TF-IDF extension now also has a small strictly future evaluation: HR@10 is
+0.292 across 24 eligible orders after the locked cutoff. Neither offline result
 measures click-through or conversion on the live product-page shelf.
 
 ### Command-line interface
@@ -97,6 +118,12 @@ Inspect the fitted model period and graph size:
 python serve_recommendations.py inspect
 ```
 
+Export every learned graph edge and final Node2vec vector in readable form:
+
+```powershell
+python serve_recommendations.py export-weights
+```
+
 With an editable installation, replace `python serve_recommendations.py` with
 `odos-recommend`. The saved `models/final_recommender.pkl` is ignored by Git;
 only load this trusted local pickle or one produced by your own training job.
@@ -117,34 +144,34 @@ recommendations = model.recommend(
 Run the optional metadata-to-complement transfer experiment:
 
 ```powershell
-python metadata_transfer_experiment.py
+python -m experiments.metadata_transfer_experiment
 ```
 
 Generate graph visualizations, optionally centered on a particular SKU:
 
 ```powershell
-python graph_visualizations.py
-python graph_visualizations.py --center-sku IT16951
+python -m experiments.graph_visualizations
+python -m experiments.graph_visualizations --center-sku IT16951
 ```
 
 Run model selection on train/development data only:
 
 ```powershell
-python experiment_runner.py development --trials 20
+python -m experiments.experiment_runner development --trials 20
 ```
 
 After reviewing and freezing `best_dev_configuration.json`, run the test stage
 once:
 
 ```powershell
-python experiment_runner.py finalize
+python -m experiments.experiment_runner finalize
 ```
 
 The finalize command refuses to run if `final_test_results.csv` already exists.
 Generate or refresh report plots without reevaluating any model:
 
 ```powershell
-python visualization.py --center-sku IT16951
+python -m experiments.visualization --center-sku IT16951
 ```
 
 ## Historical frozen test result
@@ -181,6 +208,89 @@ This candidate is now frozen. The configuration hash is checked whenever the
 default model is trained, and the existing development and historical test
 periods are closed to further selection.
 
+## Version 2 expanded candidate generation
+
+Expanded retrieval is implemented as a separate experiment; it does not alter
+the frozen Version 1 configuration or `models/final_recommender.pkl`. For a
+normal top-10 request, Version 2 retrieves at least 500 candidates independently
+from each active signal before merging and ranking them. It records whether
+co-purchase, Product2Vec, metadata, or TF-IDF retrieved each candidate.
+
+Train the separate experimental model:
+
+```powershell
+python -m experiments.expanded_candidate_generation train
+```
+
+Inspect the full retrieved pool and the final top ten for a SKU:
+
+```powershell
+python -m experiments.expanded_candidate_generation inspect IT16951 `
+  --output outputs/v2_candidates/IT16951.csv
+```
+
+This diagnostic adds two distinct measurements. `candidate_recall` still asks
+whether the hidden target is in the ranked top `candidate_k` positions, while
+`candidate_pool_recall` asks whether any source retrieved it anywhere in the
+full pre-ranking pool. Its completed future comparison is reported below; the
+frozen 76 development queries must not be used for more tuning.
+
+Audit candidate health without using any hidden targets:
+
+```powershell
+python -m experiments.candidate_health_report
+```
+
+For a quick 100-product smoke test:
+
+```powershell
+python -m experiments.candidate_health_report `
+  --max-skus 100 `
+  --output outputs/v2_candidate_health_smoke
+```
+
+The audit checks every selected catalog SKU for empty or short pools, source
+contribution and overlap, duplicate or self recommendations, score bounds,
+final-score arithmetic, deterministic output, and latency. It exports
+`product_health.csv`, `popularity_health.csv`, `source_contributions.csv`,
+`source_combinations.csv`, and `summary.json`. It deliberately reports
+`accuracy_metrics_calculated: false`: unlabeled catalog checks cannot estimate
+HR, Recall, or MRR.
+
+The completed full-catalog audit covers all 6,257 SKUs. It found zero failed
+queries, invariant violations, empty pools, or short top-10 results. The median
+candidate pool contains 1,327 products; median latency is 38.8 ms and p95
+latency is 48.6 ms. Across all product queries, 6,193 different SKUs appear in
+at least one top ten, giving aggregate diagnostic coverage of 98.98%. This is a
+retrieval-health result, not evidence that 98.98% of future purchases will be
+predicted.
+
+## Logistic-ranking historical backtest
+
+The learned final-score experiment is implemented with dependency-free,
+L2-regularized logistic regression. It uses three separately fitted temporal
+snapshots ending before the frozen development period, so none of the 76 locked
+queries are used. Run it with:
+
+```powershell
+python -m experiments.logistic_ranker_experiment
+```
+
+The untouched pre-freeze backtest contains 70 one-target product-page queries:
+
+| Ranker | HR/Recall@10 | MRR@10 | Candidate recall@100 | Pool recall |
+|---|---:|---:|---:|---:|
+| Fixed 40/10/10/40 | 0.414 | 0.276 | 0.671 | 0.800 |
+| Logistic regression | 0.071 | 0.033 | 0.343 | 0.800 |
+
+The logistic ranker produced no unique hits, lost 24 fixed-blend hits, and
+retained five shared hits. Equal pool recall proves that both rankers received
+the same retrieved targets; logistic regression ordered them poorly. It learned
+negative standardized effects for Product2Vec score and text-source presence,
+consistent with a small, sampling-sensitive ranking dataset. This is a valid
+negative result: the fixed blend remains the preferred ranker, and the 70
+backtest orders are now considered observed rather than reused for more tuning.
+
 Run the automated tests:
 
 ```powershell
@@ -197,25 +307,25 @@ Run Phase 4 experiments with the default four random trials and at most 250
 evaluation queries per split:
 
 ```powershell
-python phase4_experiments.py
+python -m experiments.phase4_experiments
 ```
 
 For a quick smoke test, use one trial and 50 evaluation queries:
 
 ```powershell
-python phase4_experiments.py --trials 1 --max-queries 50
+python -m experiments.phase4_experiments --trials 1 --max-queries 50
 ```
 
 Run Phase 6 leave-one-out evaluation and error analysis:
 
 ```powershell
-python phase6_analysis.py
+python -m experiments.phase6_analysis
 ```
 
 Run the dedicated one-SKU product-page evaluation on development orders:
 
 ```powershell
-python single_sku_evaluation.py
+python -m experiments.single_sku_evaluation
 ```
 
 This command reproduces the locked development metrics without changing the
@@ -223,13 +333,13 @@ model. The selected configuration and 76-query set are now frozen. Attempts to
 use `--tune-weights` or reopen `--split test` are rejected. The archived weight
 search remains in `outputs/single_sku_evaluation/development/`.
 
-When a genuinely newer WooCommerce export is available, evaluate the unchanged
-model with:
+Evaluate a genuinely newer WooCommerce Excel or CSV export with:
 
 ```powershell
-python future_period_evaluation.py `
-  --future data/Orders-Export-NEW.xlsx `
-  --output outputs/future_evaluation/2026-new-period
+python -m experiments.future_period_evaluation `
+  --future data/Orders-Export-NEW.csv `
+  --output outputs/future_evaluation/NEW-PERIOD `
+  --include-expanded-v2
 ```
 
 Every evaluated line must be strictly later than **2026-06-19 14:28:25**.
@@ -237,6 +347,24 @@ The command refuses overlapping order IDs, altered frozen weights, training
 history beyond the cutoff, an empty eligible query set, or overwriting an
 earlier evaluation. It performs no tuning. After editable installation, use
 `odos-evaluate-future`.
+
+The first strictly future comparison used all eligible orders after the cutoff
+through 25 August 2026. The export contains 287 new orders, but 242 are
+single-product orders and 21 additional multi-product orders contain fewer than
+two SKUs known to frozen training, leaving 24 queries.
+
+| Model | HR/Recall@10 | MRR@10 | Recall@100 | Full-pool recall | Coverage@10 |
+|---|---:|---:|---:|---:|---:|
+| Frozen Version 1 | 0.292 | **0.225** | 0.458 | 0.792 | **0.033** |
+| Expanded candidates V2 | 0.292 | 0.224 | 0.458 | **1.000** | 0.033 |
+
+Both models make the same seven top-ten hits. Expanded retrieval finds all 24
+targets somewhere in its much larger pool, versus 19 for Version 1, but the
+additional five remain below rank 100 and do not improve displayed results.
+The fixed Version 1 ranking therefore remains selected. The HR@10 bootstrap
+interval is [0.125, 0.500], so another larger future period or online test is
+needed for a precise estimate; these 24 orders are now observed and closed to
+further tuning.
 
 The default pipeline keeps every exported order status, including cancelled,
 pending, refunded, and failed orders. Rows without an order ID or usable SKU
@@ -272,11 +400,12 @@ OdosErmouReccomendations/
 |   |       |-- model_freeze_manifest.json
 |   |       `-- run_configuration.json
 |   |-- future_evaluation/
-|   |   `-- NEW-PERIOD/
+|   |   `-- 2026-06-19_after_cutoff_to_2026-08-25_v1_v2/
 |   |       |-- summary_metrics.csv
 |   |       |-- prediction_outcomes.csv
 |   |       |-- bootstrap_intervals.csv
 |   |       |-- popularity_segments.csv
+|   |       |-- paired_outcomes.csv
 |   |       |-- queries.csv
 |   |       `-- run_configuration.json
 |   |-- metadata_transfer/
@@ -296,14 +425,43 @@ OdosErmouReccomendations/
 |   |   |-- heterogeneous_graph/
 |   |   |-- final/
 |   |   `-- plots/
-|   `-- visualizations/
-|       |-- graph_statistics.csv
-|       |-- graph_backbone.png
-|       |-- degree_distribution.png
-|       |-- top_copurchase_edges.png
-|       `-- sku_neighborhood_IT16951.png
+|   |-- visualizations/
+|   |   |-- graph_statistics.csv
+|   |   |-- graph_backbone.png
+|   |   |-- degree_distribution.png
+|   |   |-- top_copurchase_edges.png
+|   |   `-- sku_neighborhood_IT16951.png
+|   |-- v2_candidate_health/
+|   |   |-- product_health.csv
+|   |   |-- popularity_health.csv
+|   |   |-- source_contributions.csv
+|   |   |-- source_combinations.csv
+|   |   `-- summary.json
+|   `-- logistic_ranker_backtest/
+|       |-- backtest_summary.csv
+|       |-- backtest_outcomes.csv
+|       |-- regularization_search.csv
+|       |-- logistic_coefficients.csv
+|       |-- popularity_segments.csv
+|       |-- bootstrap_intervals.csv
+|       `-- run_configuration.json
 |-- models/
-|   `-- final_recommender.pkl
+|   |-- final_recommender.pkl
+|   `-- experimental_v2_expanded_candidates.pkl
+|-- model_configs/
+|   |-- README.md
+|   |-- final_product_page_model.json
+|   |-- final_product_page_weights.csv
+|   |-- final_model_hyperparameters.csv
+|   |-- historical_basket_model.json
+|   |-- historical_basket_weights.csv
+|   `-- model_registry.json
+|-- model_weights/
+|   |-- README.md
+|   |-- final_graph_nodes.csv
+|   |-- final_graph_edges.csv
+|   |-- final_node2vec_embeddings.csv
+|   `-- export_manifest.json
 |-- src/
 |   |-- __init__.py
 |   |-- data_loader.py
@@ -319,6 +477,8 @@ OdosErmouReccomendations/
 |   |-- heterogeneous_graph.py
 |   |-- final_recommender.py
 |   |-- model_freeze.py
+|   |-- model_export.py
+|   |-- logistic_ranker.py
 |   |-- metadata_transfer_recommender.py
 |   `-- recommendation_engine.py
 |-- tests/
@@ -328,6 +488,7 @@ OdosErmouReccomendations/
 |   |-- test_model_freeze_future.py
 |   |-- test_streamlit_app.py
 |   |-- test_recommenders.py
+|   |-- test_logistic_ranker.py
 |   `-- test_packaging.py
 |-- report/
 |   |-- README.md
@@ -337,19 +498,29 @@ OdosErmouReccomendations/
 |   |-- 04_methodology_and_algorithms.md
 |   |-- 05_experimental_setup.md
 |   |-- 06_results.md
-|   `-- 07_discussion.md
+|   |-- 07_discussion.md
+|   |-- FULL_REPORT.md
+|   `-- Odos_Ermou_Recommendation_Report.docx
+|-- experiments/
+|   |-- README.md
+|   |-- __init__.py
+|   |-- phase4_experiments.py
+|   |-- phase6_analysis.py
+|   |-- single_sku_evaluation.py
+|   |-- future_period_evaluation.py
+|   |-- expanded_candidate_generation.py
+|   |-- candidate_health_report.py
+|   |-- logistic_ranker_experiment.py
+|   |-- metadata_transfer_experiment.py
+|   |-- graph_visualizations.py
+|   |-- experiment_runner.py
+|   `-- visualization.py
+|-- scripts/
+|   `-- build_word_report.py
 |-- .gitignore
 |-- main.py
 |-- serve_recommendations.py
 |-- streamlit_app.py
-|-- phase4_experiments.py
-|-- phase6_analysis.py
-|-- single_sku_evaluation.py
-|-- future_period_evaluation.py
-|-- metadata_transfer_experiment.py
-|-- graph_visualizations.py
-|-- experiment_runner.py
-|-- visualization.py
 |-- pyproject.toml
 |-- README.md
 `-- requirements.txt
@@ -398,6 +569,73 @@ This is the reusable production model wrapper.
 - `save(path)` persists a trusted local model artifact; `load(path)` restores
   it without retraining.
 
+### `experiments/expanded_candidate_generation.py`
+
+This command builds and inspects Version 2 without modifying the frozen model.
+
+- `expanded_candidate_configuration(base_config_path)` copies Version 1's
+  trained architecture and weights, removes its selection-result labels, and
+  adds the independent expanded-retrieval settings.
+- `train_experimental_model(data_path, model_path)` fits and saves the separate
+  `models/experimental_v2_expanded_candidates.pkl` artifact.
+- `candidate_pool_diagnostics(model, sku, ranking_top_n)` returns the complete
+  merged candidate pool, per-source candidate counts, and final ranking.
+- `build_parser()` defines the `train` and `inspect` commands.
+- `main()` runs the command and optionally exports the complete pool to CSV.
+
+### `experiments/candidate_health_report.py`
+
+Audits Version 2 retrieval across the catalog without using evaluation labels.
+
+- `_name_language(value)` identifies Greek-only, Latin-only, mixed-script, and
+  missing/other product names for multilingual reliability checks.
+- `_clear_candidate_caches(engine)` bounds memory during all-catalog runs.
+- `_candidate_sources(pool)` parses the retrieval provenance attached to each
+  candidate.
+- `_pool_is_deterministic(left, right)` checks ordered SKUs and final scores
+  across repeated identical requests.
+- `audit_candidate_health(...)` calculates product, source, segment, invariant,
+  coverage, and latency diagnostics without HR, Recall, or MRR.
+- `run_candidate_health_report(...)` loads the experimental model and exports
+  the CSV and JSON artifacts.
+- `parse_args()` defines model, output, top-N, reproducible sample, and
+  determinism options; `main()` runs the command behind `odos-candidate-health`.
+
+### `src/logistic_ranker.py`
+
+Implements the learned candidate score without an external ML dependency.
+
+- `CandidateFeatureBuilder(model, training_orders, reliability_scale)` creates
+  28 strictly past-derived behavioral, content, popularity, recency, metadata,
+  source-provenance, missingness, and reliability-interaction features.
+- `CandidateFeatureBuilder.transform(seed_sku, candidate_pool)` converts a
+  complete retrieved pool into its ordered numerical feature matrix.
+- `RegularizedLogisticRanker(...)` configures L2 strength and Newton-solver
+  convergence settings.
+- `fit(features, labels, sample_weight)` standardizes features, balances the
+  positive and negative classes, and fits regularized logistic coefficients.
+- `predict_proba(features)` returns learned candidate relevance probabilities;
+  `coefficient_frame()` returns interpretable standardized coefficients.
+
+### `experiments/logistic_ranker_experiment.py`
+
+Runs the leakage-safe learned-ranking experiment entirely before frozen
+development.
+
+- `chronological_backtest_periods(...)` creates four non-overlapping whole-order
+  periods: foundation, ranker training, validation, and untouched backtest.
+- `build_ranker_training_examples(...)` uses purchased basket relationships as
+  positives and top retrieved unpurchased candidates as hard negatives.
+- `prepare_evaluation_queries(...)` creates one reproducible hidden target per
+  eligible order and retains the complete shared candidate pool.
+- `evaluate_prepared_queries(...)` compares fixed-score and learned-probability
+  ordering using HR, MRR, candidate recall, pool recall, and coverage.
+- `run_logistic_backtest(...)` fits three temporal candidate snapshots, selects
+  L2 on validation, refits the ranker, evaluates the final historical period
+  once, and writes metrics, coefficients, segments, intervals, and paired rows.
+- `parse_args()` exposes negative count, L2 values, K, seed, and bootstrap
+  settings; `main()` runs the `odos-logistic-backtest` command.
+
 ### `src/model_freeze.py`
 
 Defines and enforces the product-page model freeze.
@@ -405,10 +643,11 @@ Defines and enforces the product-page model freeze.
 - `HISTORICAL_TEST_CONFIG_PATH`, `DEFAULT_CONFIG_PATH`, and
   `FREEZE_MANIFEST_PATH` identify the archived test model, current serving
   model, and freeze record.
-- `sha256_file(path)` fingerprints exact file bytes.
+- `sha256_file(path)` fingerprints binary bytes exactly and text with
+  canonical LF newlines, so checks remain stable across operating systems.
 - `load_freeze_manifest(path)` validates and loads the locked cutoff, hash, and
   tuning state.
-- `verify_frozen_configuration(...)` rejects any byte-level change to the
+- `verify_frozen_configuration(...)` rejects any content change to the
   selected product-page configuration.
 - `verify_frozen_artifacts(...)` verifies the configuration, query set, and
   archived weight-search hashes together.
@@ -416,6 +655,17 @@ Defines and enforces the product-page model freeze.
   development queries.
 - `assert_legacy_test_reuse_allowed(...)` prevents evaluating the TF-IDF
   candidate on the already-seen historical test period.
+
+### `src/model_export.py`
+
+Creates readable, reproducible exports from the trained final artifact.
+
+- `graph_node_frame(model)` exports frequency and degree statistics.
+- `graph_edge_frame(model)` exports raw/time-decayed counts, cosine, Jaccard,
+  lift, selected edge weight, support, and both directional confidences.
+- `node2vec_embedding_frame(model)` exports the retained normalized 48-value
+  vector for every product and metadata walk node.
+- `export_model_parameters(...)` writes the three CSVs and a SHA-256 manifest.
 
 ### `serve_recommendations.py`
 
@@ -426,7 +676,10 @@ This is the production command behind `odos-recommend`.
   on all historical orders and saves `models/final_recommender.pkl`.
 - `recommend_from_model(...)` loads the saved model, applies optional inventory
   filtering, and optionally writes the recommendations to CSV.
-- `build_parser()` defines the `train`, `recommend`, and `inspect` commands.
+- `build_parser()` defines the `train`, `recommend`, `inspect`, and
+  `export-weights` commands.
+- The `export-weights` command writes all final graph edges, graph-node
+  statistics, and normalized Node2vec vectors plus a hash manifest.
 - `main()` executes the selected production command.
 
 ### `streamlit_app.py`
@@ -448,7 +701,7 @@ This is the interactive browser interface behind `odos-app`.
   chart, and CSV download.
 - `launch()` starts Streamlit when the installed `odos-app` command is used.
 
-### `phase4_experiments.py`
+### `experiments/phase4_experiments.py`
 
 This is the Phase 4 entry point. It tunes Product2Vec without using the test set
 for model selection.
@@ -489,11 +742,12 @@ Contains the reusable Phase 4 splitting and metric logic.
   Both products must exist in the training catalog.
 - `evaluate_single_sku_engine(engine, queries, train_orders, catalog_skus, k,
   candidate_k)` evaluates a product-page ranker and returns overall metrics plus
-  per-query ranks, hits, candidate recall, popularity, and predictions.
+  per-query ranks, hits, top-`candidate_k` recall, full candidate-pool recall,
+  retrieval-source provenance, popularity, and predictions.
 - `split_summary(train, dev, test)` reports lines, orders, unique SKUs,
   multi-item baskets, and date boundaries for each split.
 
-### `single_sku_evaluation.py`
+### `experiments/single_sku_evaluation.py`
 
 This is the dedicated product-page offline evaluation entry point.
 
@@ -522,7 +776,7 @@ This is the dedicated product-page offline evaluation entry point.
 - `main()` is the console entry point used by
   `odos-evaluate-product-page`.
 
-### `future_period_evaluation.py`
+### `experiments/future_period_evaluation.py`
 
 Provides the only offline assessment path for the frozen TF-IDF candidate.
 
@@ -533,12 +787,15 @@ Provides the only offline assessment path for the frozen TF-IDF candidate.
 - `run_future_evaluation(...)` verifies configuration integrity, validates
   independent dates and order IDs, fits on frozen history, evaluates every
   eligible later order without tuning, and writes metrics, outcomes, intervals,
-  segments, queries, and data fingerprints.
+  segments, queries, and data fingerprints. With `include_expanded_v2=True`, it
+  also evaluates the predefined expanded pool on the same queries and writes
+  paired outcomes.
 - `parse_args()` requires `--future` and exposes history, output, K,
-  candidate-pool, seed, and bootstrap settings—but no tuning options.
+  candidate-pool, seed, bootstrap, and the predefined V2 comparison flag; it
+  deliberately exposes no tuning options.
 - `main()` is the `odos-evaluate-future` console entry point.
 
-### `phase6_analysis.py`
+### `experiments/phase6_analysis.py`
 
 This is the Phase 6 entry point.
 
@@ -588,7 +845,7 @@ Loads and normalizes the WooCommerce order export.
 - `clean_text(value)` decodes HTML entities, applies Unicode NFKC
   normalization, collapses repeated whitespace, and returns `pandas.NA` for
   missing-value markers.
-- `load_orders(path, statuses=None)` reads the Excel workbook, validates its
+- `load_orders(path, statuses=None)` reads an Excel workbook or UTF-8 CSV, validates its
   required columns, cleans text columns, removes rows without an order ID or
   SKU, and standardizes SKUs. With the default `statuses=None`, no order status
   is filtered. Pass an iterable such as `["wc-completed", "wc-cancelled"]` to
@@ -695,7 +952,12 @@ Contains Phase 5 retrieval, link prediction, metadata filtering, and blending.
   co-purchase, Product2Vec, Adamic–Adar, and metadata scores with named weights.
 
 The production hybrid also accepts a `text` signal with the `text_score`
-column, backed by the TF-IDF model below.
+column, backed by the TF-IDF model below. Its
+`_validate_candidate_generation(...)` method validates independent source
+budgets, while `_source_limit(...)` separates retrieval depth from the number
+of products displayed. `candidate_pool(...)` returns the complete merged,
+scored pool and optional source provenance; `recommend(...)` applies the same
+final-score ranking and truncates that pool to the requested result count.
 
 ### `src/tfidf_recommender.py`
 
@@ -742,7 +1004,7 @@ Implements the optional rare-product complement-transfer experiment.
 - `MetadataEnhancedEngine` blends the production engine with normalized
   transferred-complement evidence.
 
-### `metadata_transfer_experiment.py`
+### `experiments/metadata_transfer_experiment.py`
 
 - `_fit_components(...)` fits common graph, embedding, and transfer components.
 - `_evaluate_named(...)` evaluates one named engine consistently.
@@ -753,7 +1015,7 @@ Implements the optional rare-product complement-transfer experiment.
   locks the selected weight, and compares base/enhanced engines on test.
 - `parse_args()` and `main()` provide the command-line interface.
 
-### `graph_visualizations.py`
+### `experiments/graph_visualizations.py`
 
 - `graph_statistics(graph)` reports graph size, density, components, isolates,
   largest component, and degree statistics.
@@ -799,7 +1061,7 @@ Implements the optional rare-product complement-transfer experiment.
 - `recommend_cart(...)` and `recommend(...)` perform exact cosine retrieval but
   filter all output to real product SKUs.
 
-### `experiment_runner.py`
+### `experiments/experiment_runner.py`
 
 - `inspect_status_policies(orders)` builds completed, successful-fulfilment,
   broader-intent, and all-status policies from observed values.
@@ -818,7 +1080,7 @@ Implements the optional rare-product complement-transfer experiment.
   bootstrap intervals, and refuses to overwrite an existing final result.
 - `parse_args()` and `main()` expose the `development` and `finalize` stages.
 
-### `visualization.py`
+### `experiments/visualization.py`
 
 - `plot_model_comparison(...)` creates the development ablation grouped bars.
 - `plot_final_baseline_comparison(...)` compares the original and frozen test
@@ -926,8 +1188,11 @@ copied from the versioned Phase 4 and Phase 6 output artifacts.
 - `outputs/single_sku_evaluation/development/model_freeze_manifest.json` locks
   the configuration, query set, search table, cutoffs, weights, and selected
   metrics with SHA-256 fingerprints.
-- `outputs/future_evaluation/` is intentionally empty until a genuinely newer
-  order export is evaluated; each run must use a new output directory.
+- `outputs/future_evaluation/2026-06-19_after_cutoff_to_2026-08-25_v1_v2/`
+  contains the completed untouched-period comparison of frozen V1 and the
+  predefined expanded-candidate V2, including shared queries, per-query
+  outcomes, bootstrap intervals, popularity segments, paired outcomes, and
+  the exact run configuration. The private raw CSV remains outside Git.
 - `outputs/metadata_transfer/` contains development weight selection, overall
   and segment comparisons, rare-seed results, all paired predictions, and
   queries improved by transfer.
@@ -936,12 +1201,18 @@ copied from the versioned Phase 4 and Phase 6 output artifacts.
 - `outputs/improvement_experiments/` contains every development search table,
   the frozen configuration, ablation and segment results, the one-time final
   test outcomes, bootstrap intervals, baseline comparison, and final plots.
-- `outputs/improvement_experiments/final/best_dev_configuration.json` is the
-  historical 40/30/30 configuration selected without test feedback.
-- `outputs/single_sku_evaluation/development/best_product_page_configuration.json`
-  is the current serving configuration selected on the dedicated development
-  protocol; it assigns 40% to TF-IDF and has not been evaluated on the old test
-  set.
+- `model_configs/historical_basket_model.json` is the preserved historical
+  40/30/30 configuration selected without test feedback; its readable weights
+  are in `historical_basket_weights.csv` in the same folder.
+- `model_configs/final_product_page_model.json` is the current frozen serving
+  configuration selected on the dedicated development protocol; its readable
+  weights are in `final_product_page_weights.csv`.
+- `model_configs/final_model_hyperparameters.csv` lists the selected graph,
+  Node2vec, Skip-Gram, and TF-IDF settings without calling them learned weights.
+- `model_weights/` contains all final graph nodes/edges, the retained
+  48-dimensional Node2vec matrix, and a file/hash manifest.
+- The configuration JSON files remaining under `outputs/` are experiment
+  archives, while `model_configs/` is the submission-facing source of truth.
 - `outputs/improvement_experiments/final/final_test_results.csv` is also the
   guard file that prevents accidental repeat test evaluation.
 - `requirements.txt` lists the runtime packages. `openpyxl` reads Excel,
@@ -972,6 +1243,11 @@ cosine-similarity score, and joined product metadata.
 `adamic_adar_recommendations.csv` contains link scores and shared-neighbor
 counts. `cart_recommendations.csv` contains the cart, recommended SKU,
 normalized k-NN and Adamic–Adar scores, final weighted score, and metadata.
+
+`model_weights/final_graph_edges.csv` contains all co-purchase edge evidence
+and weights. `final_node2vec_embeddings.csv` contains one normalized
+48-dimensional vector per heterogeneous graph node. `export_manifest.json`
+records their exact row counts and SHA-256 hashes.
 
 ## Metadata-filtered cart example
 
@@ -1007,9 +1283,10 @@ Values within one field are alternatives; separate fields must all match. Omit
   gives a broader comparison but takes longer.
 - Change Phase 6 runtime with `--max-queries`; change the manual-review export
   size with `--sample-size`.
-- Change improvement-search breadth with `experiment_runner.py development
-  --trials N`; keep selection on development and do not alter the frozen model
-  in response to `final_test_results.csv`.
+- Change improvement-search breadth only in a new preregistered experiment with
+  `python -m experiments.experiment_runner development --trials N`; keep
+  selection on a new development period and do not alter the frozen model in
+  response to any already-observed result file.
 - To run a genuinely new final evaluation, use a new future workbook and a new
   output directory. Do not delete the existing guard file merely to rerun the
   same test period.

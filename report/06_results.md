@@ -67,9 +67,32 @@ traversal. A separate-process reproduction returned the same metrics.
 
 These development results are now locked. Their configuration, queries, and
 weight-search files are hash-recorded in `model_freeze_manifest.json`; further
-tuning and reuse of the historical test period are blocked. No future-period
-result is reported because the current export ends at the frozen training
-cutoff.
+tuning and reuse of the historical test period are blocked.
+
+## Strictly future product-page evaluation
+
+The unchanged model was then evaluated once on an independent export. The
+strict cutoff and overlap checks left 287 new orders from 19 June through 25
+August 2026. Twenty-four orders contained at least two products known to the
+frozen catalog and therefore formed eligible one-SKU queries.
+
+| Model | Precision@10 | Recall/HR@10 | MRR@10 | Candidate recall@100 | Full-pool recall | Coverage@10 |
+|---|---:|---:|---:|---:|---:|---:|
+| Frozen V1 | 0.029 | 0.292 | **0.225** | 0.458 | 0.792 | **0.033** |
+| Expanded-candidate V2 | 0.029 | 0.292 | 0.224 | 0.458 | **1.000** | 0.033 |
+
+Both models placed 7 of 24 hidden targets in the top ten, and their successful
+queries were identical. V2 made all 24 targets available somewhere in its full
+pool, compared with 19 for V1, but its additional five targets remained below
+rank 100. It therefore improved retrieval availability without improving the
+displayed top-ten recommendations. V1 remains the selected production model;
+V2 is not promoted or refrozen.
+
+The 95% bootstrap interval for HR@10 is [0.125, 0.500] for both models. V1's
+MRR@10 interval is [0.083, 0.392], versus [0.083, 0.390] for V2. The wide
+intervals reflect the small 24-query sample, so this is useful directional
+evidence rather than a precise performance estimate. These future queries are
+now closed and must not become a tuning set.
 
 ## One-time frozen test result
 
@@ -124,6 +147,28 @@ The intervals are wide because the evaluation has only 75 observations. The
 point improvements are promising, but their future-period stability is not
 guaranteed.
 
+## Logistic-ranking historical backtest
+
+L2=0.01 won the separate 75-query validation period. The final model was then
+refitted with training and validation examples and evaluated once on 70 later
+orders ending on 13 July 2024.
+
+| Ranker | HR/Recall@10 | MRR@10 | Candidate recall@100 | Pool recall | Coverage@10 |
+|---|---:|---:|---:|---:|---:|
+| Fixed 40/10/10/40 | **0.414** | **0.276** | **0.671** | 0.800 | **0.112** |
+| Logistic regression | 0.071 | 0.033 | 0.343 | 0.800 | 0.044 |
+
+The fixed ranker hit 29 targets and the logistic ranker hit five. All five were
+shared; logistic regression introduced no unique hits and lost 24 fixed-ranker
+hits. Fixed and learned pool recall are both 0.800, confirming a reranking
+failure rather than a candidate-generation difference. The learned model
+assigned negative standardized coefficients to Product2Vec score and
+text-source presence, and the median rank of retrieved targets deteriorated
+from 7 to 163. Its HR@10 95% bootstrap interval is [0.014, 0.129], compared
+with [0.300, 0.529] for the fixed ranker. The learned ranker is therefore
+rejected; this negative result is preserved rather than retuned on the observed
+70 backtest orders.
+
 ## Reproducible artifacts
 
 Every development candidate records its seed, dates, statuses, graph settings,
@@ -135,3 +180,10 @@ outcomes, segments, baseline comparison, and bootstrap intervals are in its
 The earlier metadata-complement transfer experiment remains versioned under
 `outputs/metadata_transfer/`, but it was not used to choose this model because
 its previous test results predated the stricter selection protocol.
+
+Submission-facing parameter records are separate from result tables. The
+selected scalar weights and hyperparameters are under `model_configs/`.
+`model_weights/final_graph_edges.csv` preserves all 8,841 fitted edges, and
+`model_weights/final_node2vec_embeddings.csv` preserves the 7,029 by 48 final
+normalized embedding matrix. Their hashes and row counts are recorded in
+`model_weights/export_manifest.json`.

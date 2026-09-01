@@ -8,6 +8,9 @@ from src.data_loader import PRODUCT_COLUMNS
 from src.final_recommender import FinalRecommender, load_frozen_configuration
 from src.metadata_recommender import DEFAULT_METADATA_WEIGHTS
 from serve_recommendations import load_available_skus
+from experiments.candidate_health_report import audit_candidate_health
+from src.logistic_ranker import CandidateFeatureBuilder, FEATURE_NAMES
+from src.model_export import export_model_parameters
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -54,7 +57,7 @@ class FinalRecommenderTests(unittest.TestCase):
 
     def test_frozen_configuration_loads(self):
         configuration = load_frozen_configuration(
-            ROOT / "outputs/improvement_experiments/final/best_dev_configuration.json"
+            ROOT / "model_configs/historical_basket_model.json"
         )
         self.assertEqual(configuration["architecture"], "heterogeneous")
         self.assertEqual(configuration["blend_weights"]["copurchase"], 0.4)
@@ -106,6 +109,64 @@ class FinalRecommenderTests(unittest.TestCase):
             path = Path(directory) / "inventory.csv"
             pd.DataFrame({"SKU": ["0012", "A-3"]}).to_csv(path, index=False)
             self.assertEqual(load_available_skus(path), {"0012", "A-3"})
+
+    def test_order_loader_accepts_csv_and_preserves_leading_zero_sku(self):
+        from src.data_loader import load_orders
+
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / "orders.csv"
+            pd.DataFrame({
+                "Order ID": [1],
+                "Order Date": ["2026-08-01 10:00:00"],
+                "Order Status": ["wc-cancelled"],
+                "SKU": ["0012"],
+                "Product Name": ["Test"],
+            }).to_csv(path, index=False, encoding="utf-8-sig")
+            loaded = load_orders(path)
+            self.assertEqual(loaded.iloc[0]["SKU"], "0012")
+            self.assertEqual(loaded.iloc[0]["Order Status"], "wc-cancelled")
+
+    def test_unlabeled_candidate_health_report_checks_every_catalog_sku(self):
+        configuration = {
+            **self.configuration,
+            "candidate_generation": {
+                "minimum_per_source": 3,
+                "multiplier": 2,
+                "maximum_per_source": 10,
+                "track_sources": True,
+            },
+        }
+        model = FinalRecommender(configuration).fit(self.orders)
+        summary, details, segments, sources, combinations = audit_candidate_health(
+            model, top_n=2, check_determinism=True, progress_every=0
+        )
+        self.assertEqual(summary["evaluated_skus"], 3)
+        self.assertEqual(summary["failures"], 0)
+        self.assertEqual(summary["invariant_failures"], 0)
+        self.assertFalse(summary["accuracy_metrics_calculated"])
+        self.assertEqual(set(details["sku"]), {"A", "B", "C"})
+        self.assertTrue((details["seed_excluded"] == 1).all())
+        self.assertIn("rare", set(segments["segment"]))
+        self.assertIn("copurchase", set(sources["source"]))
+        self.assertFalse(combinations.empty)
+        pool = model.engine.candidate_pool(["A"], top_n=2)
+        features = CandidateFeatureBuilder(model, self.orders).transform("A", pool)
+        self.assertEqual(features.shape, (len(pool), len(FEATURE_NAMES)))
+
+    def test_learned_parameter_export_contains_graph_and_embeddings(self):
+        model = FinalRecommender(self.configuration).fit(self.orders)
+        with TemporaryDirectory() as directory:
+            output = Path(directory)
+            manifest = export_model_parameters(model, output)
+            nodes = pd.read_csv(output / "final_graph_nodes.csv")
+            edges = pd.read_csv(output / "final_graph_edges.csv")
+            embeddings = pd.read_csv(output / "final_node2vec_embeddings.csv")
+            self.assertEqual(manifest["graph"]["nodes"], len(nodes))
+            self.assertEqual(manifest["graph"]["edges"], len(edges))
+            self.assertEqual(manifest["node2vec"]["nodes"], len(embeddings))
+            self.assertIn("selected_edge_weight", edges)
+            self.assertIn("left_to_right_confidence", edges)
+            self.assertIn("embedding_00", embeddings)
 
 
 if __name__ == "__main__":

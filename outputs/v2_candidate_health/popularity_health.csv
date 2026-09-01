@@ -1,0 +1,4 @@
+﻿segment,skus,zero_candidate_rate,short_top_n_rate,mean_candidate_pool_size,median_candidate_pool_size,p95_latency_ms,invariant_failures
+rare,4978,0.0,0.0,1314.528726396143,1327.0,48.50300003890879,0
+medium,1177,0.0,0.0,1317.4834324553951,1328.0,48.933140048757195,0
+popular,102,0.0,0.0,1313.4607843137255,1320.0,49.036875023739405,0

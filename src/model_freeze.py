@@ -8,19 +8,32 @@ from pathlib import Path
 
 
 HISTORICAL_TEST_CONFIG_PATH = Path(
-    "outputs/improvement_experiments/final/best_dev_configuration.json"
+    "model_configs/historical_basket_model.json"
 )
 DEFAULT_CONFIG_PATH = Path(
-    "outputs/single_sku_evaluation/development/best_product_page_configuration.json"
+    "model_configs/final_product_page_model.json"
 )
 FREEZE_MANIFEST_PATH = Path(
     "outputs/single_sku_evaluation/development/model_freeze_manifest.json"
 )
 
+CANONICAL_TEXT_SUFFIXES = {
+    ".csv", ".json", ".md", ".py", ".toml", ".txt", ".yaml", ".yml",
+}
+
 
 def sha256_file(path) -> str:
-    """Return the lowercase SHA-256 digest of a file's exact bytes."""
-    return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+    """Return a stable SHA-256 digest across Windows and Unix checkouts.
+
+    Git may represent a text file with CRLF locally and LF in its repository
+    blob. Text files are therefore hashed after canonicalizing newlines to LF;
+    binary files continue to be hashed byte for byte.
+    """
+    path = Path(path)
+    data = path.read_bytes()
+    if path.suffix.casefold() in CANONICAL_TEXT_SUFFIXES:
+        data = data.replace(b"\r\n", b"\n").replace(b"\r", b"\n")
+    return hashlib.sha256(data).hexdigest()
 
 
 def load_freeze_manifest(path=FREEZE_MANIFEST_PATH):
@@ -43,7 +56,7 @@ def load_freeze_manifest(path=FREEZE_MANIFEST_PATH):
 
 def verify_frozen_configuration(config_path=DEFAULT_CONFIG_PATH,
                                 manifest_path=FREEZE_MANIFEST_PATH):
-    """Reject any byte-level change to the configuration named by the manifest."""
+    """Reject changes to the configuration named by the freeze manifest."""
     config_path = Path(config_path)
     manifest = load_freeze_manifest(manifest_path)
     locked_path = Path(manifest["configuration_path"])
@@ -94,7 +107,7 @@ def assert_legacy_test_reuse_allowed(manifest_path=FREEZE_MANIFEST_PATH):
     if not manifest.get("historical_test_reopened", False):
         raise RuntimeError(
             "The historical test period is closed and must not be reopened for "
-            "the TF-IDF candidate. Use future_period_evaluation.py with orders "
+            "the TF-IDF candidate. Use odos-evaluate-future with orders "
             f"strictly after {manifest['serving_training_cutoff']}."
         )
     return manifest

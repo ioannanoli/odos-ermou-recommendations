@@ -29,7 +29,10 @@ weakness. A subsequent development-only product-page experiment adds TF-IDF.
 The selected 40% co-purchase, 10% Product2Vec, 10% metadata, and 40% TF-IDF
 blend raises dedicated one-SKU development HR@10 from 0.316 to 0.408 and MRR@10
 from 0.165 to 0.214. This candidate has not been reevaluated on the old test
-period. The final system is packaged as a persisted local model and a
+period. On 24 genuinely later orders, the unchanged candidate achieves HR@10
+of 0.292 and MRR@10 of 0.225. An expanded retrieval variant reaches full-pool
+recall of 1.000 but does not improve top-ten results, so frozen V1 remains
+selected. The final system is packaged as a persisted local model and a
 Streamlit product-page interface with one combined **Προϊόντα που μπορεί να σας
 αρέσουν** shelf, inventory restrictions, score explanations, and CSV export.
 The Streamlit shelf uses the new four-signal candidate; the older test figures
@@ -112,7 +115,8 @@ The source is a private WooCommerce Excel order export. The workbook contains
 order identifiers, timestamps, order status, SKU, product name, quantity and
 value fields, and Greek/English catalog attributes. The raw export is excluded
 from Git because it may contain billing, shipping, or location information.
-Only aggregate product-level outputs are versioned.
+Versioned results exclude names, contact details, addresses, and locations;
+query-level reproducibility files retain only internal order IDs and SKUs.
 
 Rows with a missing order identifier or unusable SKU are removed. The requested
 policy retains every exported order status, including cancelled, failed,
@@ -123,6 +127,14 @@ data, and the all-status policy is retained because it performs best there.
 
 No external API, web scraping, or third-party customer data is used. All
 processing is reproducible from the local workbook and source code.
+
+A second private WooCommerce CSV supplied the strictly future evaluation. The
+frozen cutoff and order-overlap checks leave 370 lines from 287 new orders,
+dated 19 June 2026 at 22:16:17 through 25 August 2026 at 13:20:29. The period
+contains 253 unique SKUs: 153 known to frozen history and 100 unseen there.
+Only 24 orders contain at least two known products and qualify for the one-SKU
+evaluation. All statuses, including cancelled orders, remain included. The raw
+CSV stays outside Git; its SHA-256 fingerprint is recorded with the results.
 
 ### 2.2 Dataset Overview
 
@@ -393,7 +405,21 @@ test evaluation.
 | TF-IDF channels | Word 0.60; character 0.40 |
 | TF-IDF n-grams | Words 1–2; characters 3–5 |
 
-### 3.5 Model freeze and next assessment
+For submission, the exact final JSON configurations are separated from
+experiment outputs under `model_configs/`. The serving model is
+`final_product_page_model.json`, with a human-readable weight table in
+`final_product_page_weights.csv`. The earlier basket-completion model and its
+weights are preserved separately and labelled historical rather than serving.
+The experiment programs themselves are isolated under `experiments/`; reusable
+model implementations remain under `src/`.
+
+The project distinguishes selected settings from learned parameters. Graph and
+Node2vec hyperparameters are listed in
+`model_configs/final_model_hyperparameters.csv`. The fitted 8,841 co-purchase
+edges and 7,029 retained 48-dimensional heterogeneous Node2vec vectors are
+exported under `model_weights/`, with hashes in `export_manifest.json`.
+
+### 3.5 Model freeze and future assessment
 
 The product-page candidate was frozen on 25 August 2026. Its manifest records
 SHA-256 fingerprints for the selected configuration, fixed 76-query set, and
@@ -402,11 +428,15 @@ complete weight-search table. It also fixes the serving training cutoff at
 serving. Further tuning on the development queries and reuse of the historical
 test period are rejected by code.
 
-The next valid offline estimate must use every eligible order strictly later
+The next valid offline estimate was required to use every eligible order strictly later
 than the cutoff, with no overlapping order IDs and no weight changes. The
 future-period command has no tuning mode and refuses to overwrite an existing
-result directory. Alternatively, a preregistered online product-page experiment
-can measure interaction outcomes.
+result directory. It was run once on 24 eligible queries from 19 June through
+25 August 2026. Frozen V1 and the already-defined expanded-candidate V2 were
+compared on identical queries with K=10, candidate recall at 100, and 2,000
+bootstrap samples. No weights or hyperparameters were chosen after observing
+the export. These 24 queries are now closed to tuning. A preregistered online
+product-page experiment is still needed to measure interaction outcomes.
 
 ### 3.6 Metrics
 
@@ -486,7 +516,29 @@ remain below rank ten, making re-ranking a clear improvement target. Because
 the blend was selected on these same development queries, this is selection
 evidence rather than an unbiased final estimate.
 
-### 4.4 One-time test result
+### 4.4 Strictly future product-page evaluation
+
+The frozen product-page model was evaluated once on the independent later
+export. Of 287 new orders after the cutoff, 24 contained at least two products
+known to frozen history and formed eligible directed one-SKU queries.
+
+| Model | Precision@10 | Recall/HR@10 | MRR@10 | Candidate recall@100 | Full-pool recall | Coverage@10 |
+|---|---:|---:|---:|---:|---:|---:|
+| Frozen V1 | 0.029 | 0.292 | **0.225** | 0.458 | 0.792 | **0.033** |
+| Expanded-candidate V2 | 0.029 | 0.292 | 0.224 | 0.458 | **1.000** | 0.033 |
+
+Both variants rank the same seven targets in the top ten. Expanded V2 makes
+all 24 targets available somewhere in its full pool, compared with 19 for V1,
+but the additional five targets remain below rank 100. Broader retrieval alone
+therefore does not improve the displayed recommendations. Frozen V1 remains
+selected and V2 is not promoted.
+
+Both HR@10 estimates have a 95% bootstrap interval of [0.125, 0.500]. V1's
+MRR@10 interval is [0.083, 0.392], versus [0.083, 0.390] for V2. These wide
+intervals make the result directional rather than precise. The 24 queries are
+now observed and must not be reused for tuning.
+
+### 4.5 One-time historical test result
 
 | Model | Precision@10 | Recall/HR@10 | MRR@10 | Coverage@10 |
 |---|---:|---:|---:|---:|
@@ -506,7 +558,7 @@ future-period or online measurement.
 
 ![One-time final comparison](../outputs/improvement_experiments/plots/final_baseline_comparison.png)
 
-### 4.5 Segment analysis
+### 4.6 Segment analysis
 
 | Segment type | Segment | Queries | HR@10 | MRR@10 |
 |---|---|---:|---:|---:|
@@ -526,7 +578,7 @@ has only three queries, so its zero score is not a stable estimate.
 
 ![Hit Rate by cart size](../outputs/improvement_experiments/plots/hit_rate_by_cart_size.png)
 
-### 4.6 Statistical stability
+### 4.7 Statistical stability
 
 | Metric | Point estimate | 95% bootstrap interval |
 |---|---:|---:|
@@ -538,7 +590,7 @@ The intervals are wide because only 75 independent query orders are available.
 The improvement is promising, but the experiment does not establish that the
 same effect size will hold for future customers or assortments.
 
-### 4.7 Graph visualization
+### 4.8 Graph visualization
 
 Plotting all nodes and edges would be unreadable. The report therefore shows a
 100-edge backbone and bounded local ego networks. Node size reflects degree,
@@ -625,8 +677,16 @@ hub-corrected.
 Product-name TF-IDF supplies an interpretable fourth signal. It outperforms the
 three earlier individual components on the dedicated one-SKU development task,
 and the four-signal blend improves HR@10 from 0.316 to 0.408. The improvement
-must still be confirmed on new data because the blend was selected on the same
-76 development queries used to report it.
+was selected on the same 76 development queries used to report it, but the
+later untouched period supplies an initial independent estimate: HR@10 is
+0.292 and MRR@10 is 0.225 on 24 eligible queries. The small sample prevents a
+precise conclusion, but it shows that the frozen signals transfer beyond the
+development period.
+
+Expanded candidate retrieval raises full-pool recall on these future queries
+from 0.792 to 1.000 without changing candidate recall@100 or HR@10. Retrieval
+breadth is therefore not enough by itself; V2 needs improved source calibration
+or reranking before it can replace frozen V1.
 
 All-status training won on development data. This implies that cancelled and
 pending baskets retain some useful intent in this export, but the conclusion is
@@ -637,6 +697,14 @@ Adamic–Adar's zero final weight is also informative. Shared-neighbor link
 prediction was reasonable in theory, but it did not add value once stronger
 signals were combined. A sophisticated system does not need to keep every
 tested algorithm.
+
+The submission preserves more than the four top-level blend coefficients. The
+complete fitted graph edge table exposes the symmetric cosine walk weight and
+directional recommendation confidence, while the embedding export exposes all
+48 retained values for every product and metadata node. The manifest ties
+these learned parameters to the trusted pickle and frozen JSON by SHA-256 hash.
+This improves reproducibility without treating generated parameters as new
+experimental results.
 
 ### 6.2 Limitations
 
@@ -654,8 +722,25 @@ tested algorithm.
 - A pickle artifact must only be loaded from a trusted source.
 - The same historical export has supported several development analyses;
   confidence must now come from genuinely new orders.
+- The first future evaluation has only 24 eligible queries. It is now observed
+  and closed to tuning, and its wide interval prevents strong segment claims.
 
 ### 6.3 Future work
+
+Expanded Version 2 candidate retrieval and its unlabeled engineering audit are
+now implemented separately from the frozen model. Across all 6,257 catalog
+SKUs, the audit produced no retrieval or invariant failures, a median pool of
+1,327 candidates, median latency of 38.8 ms, and p95 latency of 48.6 ms. These
+figures establish availability, correctness, and speed; they do not measure
+recommendation relevance and therefore do not replace future-period HR or MRR.
+
+A separate learned-score experiment used three temporal candidate snapshots
+and L2-regularized logistic regression entirely before frozen development. On
+its untouched 70-query backtest, the fixed 40/10/10/40 ranker achieved HR@10
+0.414 and MRR@10 0.276, while logistic regression achieved only 0.071 and
+0.033. Both had 0.800 full-pool recall, proving that the loss came from
+reranking. The learned ranker is rejected, and these 70 observed orders will
+not be reused to tune another variant.
 
 1. **Extend text content.** The product-name TF-IDF baseline is complete. Add
    cleaned category paths or descriptions as separately weighted fields and
@@ -666,8 +751,9 @@ tested algorithm.
    price, margin, availability, and product lifecycle.
 4. **Session data.** Collect views, searches, clicks, add-to-cart actions, and
    sequence timestamps to distinguish interest from completed purchase.
-5. **New-period validation.** The system is now frozen. Evaluate it on orders
-   strictly later than 19 June 2026 without changing settings after results.
+5. **Larger new-period validation.** Treat the completed 24-query future run as
+   closed. Accumulate a substantially larger later period and preregister any
+   comparison before inspecting its outcomes.
 6. **Online experiment.** Compare the combined product-page shelf with the
    current shop logic and record click-through, add-to-cart rate, conversion,
    and revenue.
@@ -676,6 +762,8 @@ tested algorithm.
    practice [6].
 8. **Operational monitoring.** Track query latency, coverage, drift, status mix,
    inventory filtering, and segment performance after every retraining cycle.
+   Regenerate the graph/embedding exports and hash manifest for each approved
+   training snapshot.
 
 ### 6.4 Conclusion
 
@@ -683,11 +771,13 @@ The project demonstrates that a relatively small and sparse retail dataset can
 support a reproducible graph-and-content recommender. The historical hybrid
 raises test HR@10 by eight percentage points and retrieves six additional
 held-out products. The later TF-IDF product-page candidate raises development
-HR@10 from 0.316 to 0.408, adding eight hits while losing one. The
-system is sufficiently mature for local demonstration, but the limited samples
-and absence of online feedback require cautious interpretation. The next
-academic priority is new-period evidence rather than another round of tuning on
-the same development orders.
+HR@10 from 0.316 to 0.408, adding eight hits while losing one, and achieves
+HR@10 of 0.292 on 24 genuinely later queries. Expanded retrieval finds every
+future target but does not improve the top ten, so frozen V1 remains selected.
+The system is sufficiently mature for local demonstration, but the limited
+samples and absence of online feedback require cautious interpretation. The
+next academic priority is a larger later period or a preregistered online
+product-page experiment rather than another round of tuning on observed data.
 
 ## 7. Members and Roles
 
@@ -724,7 +814,8 @@ with course dates if required.
 | Week 12 | Deployment and reporting | Product-page Streamlit UI, final report | Complete |
 | Week 13 | Text content extension | TF-IDF baseline and four-signal product-page blend | Complete |
 | 25 Aug 2026 | Model freeze | Hash-locked configuration and closed tuning/test periods | Complete |
-| Next iteration | New-period validation | Confirm TF-IDF blend without retuning | Waiting for newer orders |
+| 1 Sep 2026 | First future validation | Frozen V1 versus predefined expanded V2 on 24 untouched queries | Complete |
+| Next iteration | Larger validation | Accumulate a larger later period or run an online experiment | Planned |
 
 ## 9. Bibliography
 
@@ -780,21 +871,32 @@ python -m unittest discover -s tests -v
 Reproduce the locked dedicated one-SKU metrics without model selection:
 
 ```powershell
-python single_sku_evaluation.py
+python -m experiments.single_sku_evaluation
 ```
 
-Evaluate once a genuinely newer export is available:
+The completed future evaluation used the private CSV and predefined V2 flag:
 
 ```powershell
-python future_period_evaluation.py `
-  --future data/Orders-Export-NEW.xlsx `
-  --output outputs/future_evaluation/NEW-PERIOD
+python -m experiments.future_period_evaluation `
+  --future "C:\path\to\new-orders.csv" `
+  --output outputs/future_evaluation/NEW-PERIOD `
+  --include-expanded-v2
 ```
+
+Do not rerun that command against the observed Juneâ€“August file or tune on its
+24 queries. A future use requires a later, non-overlapping export and a new
+output directory.
 
 Train the frozen deployment model on all available history:
 
 ```powershell
 python serve_recommendations.py train
+```
+
+Export the fitted graph weights and Node2vec vectors:
+
+```powershell
+python serve_recommendations.py export-weights
 ```
 
 Launch the local interface:
@@ -806,23 +908,31 @@ python -m streamlit run streamlit_app.py
 Generate report plots without reevaluating the final model:
 
 ```powershell
-python visualization.py --center-sku IT16951
+python -m experiments.visualization --center-sku IT16951
 ```
 
 ### Appendix B: Main reproducible artifacts
 
 | Artifact | Purpose |
 |---|---|
-| `outputs/improvement_experiments/final/best_dev_configuration.json` | Historical test-frozen 40/30/30 configuration |
+| `model_configs/historical_basket_model.json` | Historical test-frozen 40/30/30 configuration |
+| `model_configs/historical_basket_weights.csv` | Readable weights for the historical comparison model |
 | `outputs/improvement_experiments/final/final_test_results.csv` | One-time aggregate test metrics |
 | `outputs/improvement_experiments/final/final_test_outcomes.csv` | Per-query ranks and hits |
 | `outputs/improvement_experiments/final/final_test_segments.csv` | Popularity and cart-size results |
 | `outputs/improvement_experiments/final/bootstrap_intervals.csv` | Query-bootstrap uncertainty intervals |
 | `outputs/improvement_experiments/plots/` | Versioned result and graph visualizations |
-| `outputs/single_sku_evaluation/development/best_product_page_configuration.json` | Current four-signal serving configuration |
+| `model_configs/final_product_page_model.json` | Current frozen four-signal serving configuration |
+| `model_configs/final_product_page_weights.csv` | Readable serving blend and component weights |
+| `model_configs/final_model_hyperparameters.csv` | Graph, Node2vec, Skip-Gram, and TF-IDF settings |
+| `model_weights/final_graph_edges.csv` | All fitted co-purchase edge weights and directional evidence |
+| `model_weights/final_graph_nodes.csv` | Product frequency, time-decayed frequency, degree, and weighted degree |
+| `model_weights/final_node2vec_embeddings.csv` | Final normalized 48-dimensional vectors for product and metadata nodes |
+| `model_weights/export_manifest.json` | Model/configuration fingerprints and export row hashes |
 | `outputs/single_sku_evaluation/development/four_signal_weight_search.csv` | All 84 product-page development blends |
 | `outputs/single_sku_evaluation/development/model_freeze_manifest.json` | Hashes, cutoffs, locked metrics, and closed-tuning declaration |
-| `future_period_evaluation.py` | No-tuning assessment for orders strictly after the cutoff |
+| `experiments/future_period_evaluation.py` | No-tuning assessment for orders strictly after the cutoff |
+| `outputs/future_evaluation/2026-06-19_after_cutoff_to_2026-08-25_v1_v2/` | Untouched-period V1/V2 metrics, outcomes, intervals, shared queries, and configuration |
 | `models/final_recommender.pkl` | Local trusted deployment artifact; excluded from Git |
 
 ### Appendix C: Metric definitions

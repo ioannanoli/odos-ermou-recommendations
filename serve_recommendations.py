@@ -11,10 +11,12 @@ import pandas as pd
 
 from src.data_loader import load_orders
 from src.final_recommender import (DEFAULT_CONFIG_PATH, FinalRecommender)
+from src.model_export import export_model_parameters
 
 
 DATA_PATH = Path("data/Orders-Export-2026-June-07-2054.xlsx")
 MODEL_PATH = Path("models/final_recommender.pkl")
+MODEL_WEIGHTS_PATH = Path("model_weights")
 
 
 def load_available_skus(path, sku_column="SKU"):
@@ -71,6 +73,14 @@ def build_parser():
 
     inspect = subparsers.add_parser("inspect", help="Show fitted model details.")
     inspect.add_argument("--model", type=Path, default=MODEL_PATH)
+
+    export = subparsers.add_parser(
+        "export-weights",
+        help="Export graph edges and final Node2vec vectors as readable files.",
+    )
+    export.add_argument("--model", type=Path, default=MODEL_PATH)
+    export.add_argument("--config", type=Path, default=DEFAULT_CONFIG_PATH)
+    export.add_argument("--output", type=Path, default=MODEL_WEIGHTS_PATH)
     return parser
 
 
@@ -90,10 +100,17 @@ def main():
         print(recommendations.to_string(index=False))
         if arguments.output:
             print(f"\nSaved recommendations to {arguments.output}")
-    else:
+    elif arguments.command == "inspect":
         model = FinalRecommender.load(arguments.model)
         print(json.dumps(model.training_summary, ensure_ascii=True, indent=2))
         print(json.dumps(model.configuration["blend_weights"], indent=2))
+    else:
+        model = FinalRecommender.load(arguments.model)
+        manifest = export_model_parameters(
+            model, arguments.output, arguments.model, arguments.config
+        )
+        print(f"Exported learned parameters to {arguments.output.resolve()}")
+        print(json.dumps(manifest, ensure_ascii=True, indent=2))
 
 
 if __name__ == "__main__":

@@ -2,7 +2,8 @@ import unittest
 
 import pandas as pd
 
-from single_sku_evaluation import PopularityBaseline, four_signal_weight_grid
+from experiments.single_sku_evaluation import (PopularityBaseline,
+                                              four_signal_weight_grid)
 from src.evaluation import evaluate_single_sku_engine, single_sku_queries
 
 
@@ -12,6 +13,15 @@ class _FixedEngine:
         rankings = {"A": ["B", "C"], "B": ["A", "C"]}
         rows = [{"recommended_sku": sku} for sku in rankings.get(seed, [])[:top_n]]
         return pd.DataFrame(rows, columns=["recommended_sku"])
+
+
+class _PoolAwareEngine:
+    def candidate_pool(self, cart_skus, top_n=10):
+        del cart_skus, top_n
+        return pd.DataFrame({
+            "recommended_sku": ["B", "C", "D"],
+            "candidate_sources": ["copurchase", "text", "metadata | text"],
+        })
 
 
 class SingleSkuEvaluationTests(unittest.TestCase):
@@ -48,6 +58,22 @@ class SingleSkuEvaluationTests(unittest.TestCase):
         self.assertEqual(summary.iloc[0]["precision_at_k"], 0.5)
         self.assertEqual(summary.iloc[0]["mrr_at_k"], 1.0)
         self.assertEqual(outcomes.iloc[0]["target_rank"], 1)
+
+    def test_candidate_pool_recall_is_separate_from_top_candidate_recall(self):
+        queries = [{
+            "order_id": "1", "seed_sku": "A", "target_sku": "D",
+            "held_out_basket_size": 2,
+        }]
+        summary, outcomes = evaluate_single_sku_engine(
+            _PoolAwareEngine(), queries, self.orders, {"A", "B", "C", "D"},
+            k=1, candidate_k=2,
+        )
+        self.assertEqual(summary.iloc[0]["candidate_recall"], 0.0)
+        self.assertEqual(summary.iloc[0]["candidate_pool_recall"], 1.0)
+        self.assertEqual(outcomes.iloc[0]["target_retrieved_rank"], 3)
+        self.assertEqual(
+            outcomes.iloc[0]["target_candidate_sources"], "metadata | text"
+        )
 
     def test_category_popularity_prioritizes_shared_category(self):
         catalog = pd.DataFrame(

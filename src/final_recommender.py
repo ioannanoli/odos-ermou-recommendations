@@ -117,6 +117,7 @@ class FinalRecommender:
             copurchase, product2vec, adamic_adar, catalog,
             weights=self.configuration["blend_weights"], metadata_model=metadata,
             text_model=text_model,
+            candidate_generation=self.configuration.get("candidate_generation"),
         )
         self.product_catalog = catalog
         dates = pd.to_datetime(training["Order Date"], errors="raise")
@@ -180,6 +181,7 @@ class FinalRecommender:
             weights=weights,
             metadata_model=self.engine.metadata_model,
             text_model=self.engine.text_model,
+            candidate_generation=self.engine.candidate_generation,
         )
 
     def recommend_frequently_bought_together(

@@ -5,7 +5,8 @@ import unittest
 
 import pandas as pd
 
-from future_period_evaluation import _ensure_empty_output, strictly_future_orders
+from experiments.future_period_evaluation import (_ensure_empty_output,
+                                                  strictly_future_orders)
 from src.model_freeze import (DEFAULT_CONFIG_PATH, FREEZE_MANIFEST_PATH,
                               assert_development_tuning_open,
                               assert_legacy_test_reuse_allowed,

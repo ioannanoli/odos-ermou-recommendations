@@ -1,0 +1,15 @@
+weight_group,component,weight,description
+final_blend,copurchase,0.40,Direct co-purchase confidence
+final_blend,product2vec,0.30,Product2Vec cosine similarity
+final_blend,adamic_adar,0.00,Adamic-Adar link-prediction score
+final_blend,metadata,0.30,Structured metadata similarity
+metadata_field,category,0.35,Product category agreement
+metadata_field,brand,0.20,Brand agreement
+metadata_field,age,0.25,Age-group agreement
+metadata_field,hero,0.15,Hero or franchise agreement
+metadata_field,gender,0.05,Gender-label agreement
+heterogeneous_graph,copurchase,1.00,Behavioral graph edge weight
+heterogeneous_graph,category,0.05,Category relationship weight
+heterogeneous_graph,brand,0.05,Brand relationship weight
+heterogeneous_graph,age,0.05,Age relationship weight
+heterogeneous_graph,hero,0.05,Hero relationship weight

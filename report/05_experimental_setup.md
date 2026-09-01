@@ -37,7 +37,8 @@ Its final blend is 40% direct co-purchase, 30% Product2Vec, 30% metadata
 similarity, and 0% Adamic–Adar. Metadata relationship weights are 0.05 each for
 category, brand, age, and hero, versus 1.0 for co-purchase.
 
-`experiment_runner.py development` never evaluates test queries. The separate
+`python -m experiments.experiment_runner development` never evaluates test
+queries. The separate
 `finalize` stage reads the frozen JSON, refits on train+development, and writes
 a sentinel result file. It refuses to evaluate the test split again once that
 file exists.
@@ -83,11 +84,49 @@ SHA-256 hashes of its configuration, 76 development queries, and complete
 Serving verifies the configuration hash before fitting. The development command
 now rejects further tuning and rejects reopening the historical test split.
 
-The preregistered next offline assessment uses the unchanged model and every
+The preregistered next offline assessment used the unchanged model and every
 eligible order strictly later than that cutoff. It rejects overlapping order
 IDs, later rows in training history, altered configuration bytes, and reused
 output directories. No hyperparameter or weight-selection option is available
 in the future-period evaluator.
 
+The assessment was executed once on 24 eligible queries dated from 19 June
+through 25 August 2026. Frozen V1 and the already-defined expanded-candidate V2
+were evaluated on exactly the same directed SKU pairs. Both used K=10,
+candidate recall at 100, the same frozen 40/10/10/40 scoring formula, and 2,000
+paired bootstrap samples. V2 changed retrieval breadth and source provenance
+only; no weights or hyperparameters were selected using these future orders.
+These 24 queries are now considered observed and closed to further tuning.
+
 Its live business effect must still be measured on future data or in an A/B
 test because offline co-occurrence does not measure customer interaction.
+
+## Final parameter record
+
+The submission separates four parameter types. The final ranking and metadata
+weights are in `model_configs/final_product_page_weights.csv`; graph,
+Node2vec, Skip-Gram, and TF-IDF settings are in
+`model_configs/final_model_hyperparameters.csv`; the complete frozen JSON is in
+`model_configs/final_product_page_model.json`; and parameters learned from the
+9,727-order training snapshot are under `model_weights/`.
+
+The learned export contains 6,257 graph nodes, 8,841 co-purchase edges, and
+7,029 normalized 48-dimensional heterogeneous Node2vec vectors. The edge file
+distinguishes the symmetric cosine weight used by random walks from directional
+confidence used by direct co-purchase ranking. `export_manifest.json` records
+the fitted pickle hash, frozen configuration hash, row counts, and file hashes.
+These exports document the fitted model; they are not another tuning or
+evaluation stage.
+
+## Logistic-ranking backtest
+
+The learned ranker uses only orders ending on 13 July 2024, before the frozen
+76-query development period. Four whole-order windows contain 3,404 foundation
+orders, 1,361 ranker-training orders, 1,021 validation orders, and 1,022 final
+backtest orders. Candidate models are refitted at each boundary: snapshot 1
+creates training features, snapshot 2 selects L2 from 0.01, 0.1, 1, and 10,
+and snapshot 3 creates the untouched 70-query backtest. Thirty high-ranked
+unpurchased candidates are sampled per training seed. The same candidate pools
+are passed to the fixed and logistic rankers, and the backtest is evaluated
+once using HR/Recall@10, MRR@10, candidate recall@100, full-pool recall,
+coverage, popularity segments, paired wins/losses, and bootstrap intervals.

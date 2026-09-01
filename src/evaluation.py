@@ -157,12 +157,26 @@ def evaluate_single_sku_engine(engine, queries, train_orders, catalog_skus,
     for query in queries:
         seed = str(query["seed_sku"])
         target = str(query["target_sku"])
-        recommendations = engine.recommend([seed], top_n=candidate_k)
+        if hasattr(engine, "candidate_pool"):
+            retrieved_pool = engine.candidate_pool([seed], top_n=candidate_k)
+            recommendations = retrieved_pool.head(candidate_k)
+        else:
+            recommendations = engine.recommend([seed], top_n=candidate_k)
+            retrieved_pool = recommendations
         ranked = recommendations.get(
+            "recommended_sku", pd.Series(dtype=str)
+        ).astype(str).tolist()
+        retrieved = retrieved_pool.get(
             "recommended_sku", pd.Series(dtype=str)
         ).astype(str).tolist()
         top_k = ranked[:k]
         candidate_rank = ranked.index(target) + 1 if target in ranked else 0
+        retrieved_rank = retrieved.index(target) + 1 if target in retrieved else 0
+        target_sources = ""
+        if retrieved_rank and "candidate_sources" in retrieved_pool:
+            target_sources = str(
+                retrieved_pool.iloc[retrieved_rank - 1]["candidate_sources"]
+            )
         hit = int(target in top_k)
         target_count = int(popularity.get(target, 0))
         recommended_catalog.update(top_k)
@@ -176,12 +190,16 @@ def evaluate_single_sku_engine(engine, queries, train_orders, catalog_skus,
             "top_prediction": top_k[0] if top_k else pd.NA,
             "top_k_skus": " | ".join(top_k),
             "recommendation_count": len(ranked),
+            "retrieved_candidate_count": len(retrieved),
             "target_rank": candidate_rank,
+            "target_retrieved_rank": retrieved_rank,
+            "target_candidate_sources": target_sources,
             "hit_at_k": hit,
             "reciprocal_rank_at_k": (
                 1.0 / candidate_rank if 0 < candidate_rank <= k else 0.0
             ),
             "target_in_candidates": int(candidate_rank > 0),
+            "target_in_retrieved_pool": int(retrieved_rank > 0),
         })
     outcomes = pd.DataFrame(rows)
     count = len(outcomes)
@@ -195,6 +213,12 @@ def evaluate_single_sku_engine(engine, queries, train_orders, catalog_skus,
         "hit_rate_at_k": outcomes["hit_at_k"].mean() if count else 0.0,
         "mrr_at_k": outcomes["reciprocal_rank_at_k"].mean() if count else 0.0,
         "candidate_recall": outcomes["target_in_candidates"].mean() if count else 0.0,
+        "candidate_pool_recall": (
+            outcomes["target_in_retrieved_pool"].mean() if count else 0.0
+        ),
+        "mean_retrieved_candidates": (
+            outcomes["retrieved_candidate_count"].mean() if count else 0.0
+        ),
         "catalog_coverage_at_k": (
             len(recommended_catalog) / len(catalog_skus) if catalog_skus else 0.0
         ),

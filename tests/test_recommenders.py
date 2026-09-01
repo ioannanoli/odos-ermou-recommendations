@@ -19,8 +19,10 @@ from src.recommendation_engine import (AdamicAdarRecommender,
 from src.metadata_transfer_recommender import MetadataEnhancedEngine, MetadataTransferRecommender
 from src.time_weighting import order_time_weights
 from src.tfidf_recommender import TfidfNameRecommender
-from phase4_experiments import sample_configurations
-from graph_visualizations import graph_statistics, neighborhood_subgraph, strongest_edge_backbone
+from experiments.phase4_experiments import sample_configurations
+from experiments.graph_visualizations import (graph_statistics,
+                                              neighborhood_subgraph,
+                                              strongest_edge_backbone)
 
 
 class RecommenderTests(unittest.TestCase):
@@ -248,6 +250,38 @@ class RecommenderTests(unittest.TestCase):
         self.assertIn("metadata_score", result.columns)
         self.assertIn("text_score", result.columns)
         self.assertAlmostEqual(sum(engine.weights.values()), 1.0)
+
+    def test_expanded_candidate_pool_tracks_sources_and_uses_its_own_budget(self):
+        orders, transfer_catalog = self._transfer_fixture()
+        catalog = pd.DataFrame(index=transfer_catalog.index)
+        for field in DEFAULT_METADATA_WEIGHTS:
+            catalog[field] = transfer_catalog[field]
+        vector = Product2VecRecommender(
+            n_components=8, walk_length=4, walks_per_node=1, epochs=1,
+            random_state=3,
+        ).fit(orders, catalog)
+        copurchase = CoPurchaseRecommender().fit(orders, catalog)
+        metadata = MetadataSimilarityRecommender().fit(catalog)
+        text = TfidfNameRecommender().fit(transfer_catalog)
+        engine = HybridRecommendationEngine(
+            copurchase, vector, None, catalog,
+            weights={"copurchase": 0.4, "product2vec": 0.1,
+                     "metadata": 0.1, "text": 0.4},
+            metadata_model=metadata, text_model=text,
+            candidate_generation={
+                "minimum_per_source": 5,
+                "multiplier": 2,
+                "maximum_per_source": 20,
+                "track_sources": True,
+            },
+        )
+        self.assertEqual(engine._source_limit("text", requested_top_n=2), 5)
+        pool = engine.candidate_pool(["R"], top_n=2)
+        ranking = engine.recommend(["R"], top_n=2)
+        self.assertGreaterEqual(len(pool), len(ranking))
+        self.assertIn("candidate_sources", pool.columns)
+        self.assertIn("candidate_source_count", pool.columns)
+        self.assertTrue((pool["candidate_source_count"] >= 1).all())
 
     def test_heterogeneous_graph_excludes_unknown_and_downweights_hubs(self):
         orders, catalog = self._transfer_fixture()

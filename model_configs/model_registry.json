@@ -1,0 +1,28 @@
+{
+  "serving_model": {
+    "name": "final_product_page_model",
+    "status": "frozen_serving",
+    "configuration": "model_configs/final_product_page_model.json",
+    "weights": "model_configs/final_product_page_weights.csv",
+    "hyperparameters": "model_configs/final_model_hyperparameters.csv",
+    "learned_graph_weights": "model_weights/final_graph_edges.csv",
+    "learned_node2vec_vectors": "model_weights/final_node2vec_embeddings.csv",
+    "learned_parameter_manifest": "model_weights/export_manifest.json",
+    "ranking_formula": "0.40 copurchase + 0.10 product2vec + 0.10 metadata + 0.40 text",
+    "selected_on": "76 development single-SKU queries",
+    "future_evaluation": "7 top-10 hits among 24 strictly later queries"
+  },
+  "historical_comparison_model": {
+    "name": "historical_basket_model",
+    "status": "frozen_historical_report_only",
+    "configuration": "model_configs/historical_basket_model.json",
+    "weights": "model_configs/historical_basket_weights.csv",
+    "ranking_formula": "0.40 copurchase + 0.30 product2vec + 0.30 metadata + 0.00 adamic_adar",
+    "selected_on": "historical development basket-completion queries",
+    "test_evaluation": "28 top-10 hits among 75 historical test queries"
+  },
+  "not_final": {
+    "expanded_candidates_v2": "experimental; future HR@10 did not improve",
+    "logistic_ranker": "rejected; underperformed the fixed formula"
+  }
+}

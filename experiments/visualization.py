@@ -12,8 +12,9 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
-from graph_visualizations import (plot_graph_backbone, plot_sku_neighborhood,
-                                  strongest_edge_backbone)
+from experiments.graph_visualizations import (plot_graph_backbone,
+                                              plot_sku_neighborhood,
+                                              strongest_edge_backbone)
 from src.copurchase_recommender import CoPurchaseRecommender
 from src.data_loader import load_orders
 from src.evaluation import chronological_order_split

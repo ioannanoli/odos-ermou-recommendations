@@ -1,0 +1,39 @@
+{
+  "protocol": "unlabeled all-catalog candidate health audit",
+  "evaluated_skus": 6257,
+  "catalog_skus": 6257,
+  "sampling_used": false,
+  "top_n": 10,
+  "failures": 0,
+  "invariant_failures": 0,
+  "zero_candidate_skus": 0,
+  "short_top_n_skus": 0,
+  "unique_top_n_catalog_skus": 6193,
+  "top_n_catalog_coverage": 0.9897714559693144,
+  "mean_candidate_pool_size": 1315.0671248202013,
+  "median_candidate_pool_size": 1327.0,
+  "p95_candidate_pool_size": 1388.0,
+  "mean_latency_ms": 39.62325181480719,
+  "median_latency_ms": 38.83109998423606,
+  "p95_latency_ms": 48.59071993269026,
+  "maximum_latency_ms": 152.50839991495013,
+  "accuracy_metrics_calculated": false,
+  "model_path": "models\\experimental_v2_expanded_candidates.pkl",
+  "model_version": "v2_expanded_candidates_experimental",
+  "candidate_generation": {
+    "minimum_per_source": 500,
+    "multiplier": 30,
+    "maximum_per_source": 3000,
+    "source_limits": {},
+    "track_sources": true
+  },
+  "blend_weights": {
+    "copurchase": 0.4,
+    "product2vec": 0.1,
+    "adamic_adar": 0.0,
+    "metadata": 0.1,
+    "text": 0.4
+  },
+  "random_state": 42,
+  "determinism_checked": true
+}

@@ -184,7 +184,7 @@ class HybridRecommendationEngine:
 
     def __init__(self, copurchase_model, product2vec_model, adamic_adar_model,
                  product_catalog, weights=None, metadata_model=None,
-                 text_model=None):
+                 text_model=None, candidate_generation=None):
         weights = dict(weights or {"product2vec": 0.75, "adamic_adar": 0.25})
         unknown = set(weights).difference(self.SCORE_COLUMNS)
         if unknown or any(value < 0 for value in weights.values()) or sum(weights.values()) <= 0:
@@ -202,6 +202,62 @@ class HybridRecommendationEngine:
         self.text_model = text_model
         self.product_catalog = product_catalog
         self.graph = product2vec_model.graph
+        self.candidate_generation = self._validate_candidate_generation(
+            candidate_generation
+        )
+
+    @classmethod
+    def _validate_candidate_generation(cls, configuration):
+        """Validate retrieval settings without changing the legacy default."""
+        configuration = dict(configuration or {})
+        supported = {
+            "minimum_per_source", "multiplier", "maximum_per_source",
+            "source_limits", "track_sources",
+        }
+        unknown = set(configuration).difference(supported)
+        if unknown:
+            raise ValueError(
+                f"Unknown candidate-generation settings: {sorted(unknown)}"
+            )
+        minimum = int(configuration.get("minimum_per_source", 100))
+        multiplier = int(configuration.get("multiplier", 10))
+        maximum = configuration.get("maximum_per_source")
+        maximum = None if maximum is None else int(maximum)
+        source_limits = dict(configuration.get("source_limits", {}))
+        unknown_sources = set(source_limits).difference(cls.SCORE_COLUMNS)
+        if minimum < 1 or multiplier < 1:
+            raise ValueError(
+                "minimum_per_source and multiplier must be positive integers."
+            )
+        if maximum is not None and maximum < minimum:
+            raise ValueError(
+                "maximum_per_source must be at least minimum_per_source."
+            )
+        if unknown_sources or any(int(value) < 1 for value in source_limits.values()):
+            raise ValueError(
+                "source_limits must contain positive limits for supported signals."
+            )
+        return {
+            "minimum_per_source": minimum,
+            "multiplier": multiplier,
+            "maximum_per_source": maximum,
+            "source_limits": {
+                signal: int(value) for signal, value in source_limits.items()
+            },
+            "track_sources": bool(configuration.get("track_sources", False)),
+        }
+
+    def _source_limit(self, signal, requested_top_n):
+        """Return the retrieval depth for one independent candidate source."""
+        explicit = self.candidate_generation["source_limits"].get(signal)
+        if explicit is not None:
+            return explicit
+        limit = max(
+            int(requested_top_n) * self.candidate_generation["multiplier"],
+            self.candidate_generation["minimum_per_source"],
+        )
+        maximum = self.candidate_generation["maximum_per_source"]
+        return min(limit, maximum) if maximum is not None else limit
 
     @staticmethod
     def _normalized_scores(frame, score_column):
@@ -216,11 +272,19 @@ class HybridRecommendationEngine:
             result[score_column] = 1.0 if maximum > 0 else 0.0
         return result
 
-    def recommend(self, cart_skus, top_n=10, metadata_filters=None):
+    def candidate_pool(self, cart_skus, top_n=10, metadata_filters=None):
+        """Retrieve, merge, score, and return the full multi-source pool.
+
+        ``top_n`` describes the downstream ranking request. Retrieval depth is
+        controlled separately by ``candidate_generation``. The returned frame
+        is not truncated, which lets offline evaluation measure whether a
+        hidden target was retrieved before judging its final rank.
+        """
         cart = list(dict.fromkeys(str(sku) for sku in cart_skus))
         if not cart:
             raise ValueError("cart_skus must contain at least one SKU.")
-        candidate_count = max(top_n * 10, 100)
+        if top_n < 1:
+            raise ValueError("top_n must be positive.")
         models = {
             "copurchase": self.copurchase_model,
             "product2vec": self.product2vec_model,
@@ -233,13 +297,19 @@ class HybridRecommendationEngine:
             model = models[signal]
             if model is None or self.weights[signal] == 0:
                 continue
-            frame = self._normalized_scores(model.recommend_cart(cart, candidate_count), score_column)
+            source_limit = self._source_limit(signal, top_n)
+            frame = self._normalized_scores(
+                model.recommend_cart(cart, source_limit), score_column
+            )
+            frame[f"source_{signal}"] = True
             combined = frame if combined is None else combined.merge(
                 frame, on="recommended_sku", how="outer"
             )
         output_columns = ["cart_skus", "recommended_sku", *self.SCORE_COLUMNS.values(),
                           "recommendation_score"]
         if combined is None or combined.empty:
+            if self.candidate_generation["track_sources"]:
+                output_columns.extend(["candidate_sources", "candidate_source_count"])
             return pd.DataFrame(columns=output_columns)
         for score_column in self.SCORE_COLUMNS.values():
             if score_column not in combined:
@@ -252,7 +322,31 @@ class HybridRecommendationEngine:
             self.weights[signal] * combined[score_column]
             for signal, score_column in self.SCORE_COLUMNS.items()
         )
+        if self.candidate_generation["track_sources"]:
+            source_columns = []
+            for signal in self.SCORE_COLUMNS:
+                source_column = f"source_{signal}"
+                if source_column not in combined:
+                    combined[source_column] = False
+                combined[source_column] = combined[source_column].map(
+                    lambda value: bool(value) if pd.notna(value) else False
+                )
+                source_columns.append(source_column)
+            combined["candidate_sources"] = combined.apply(
+                lambda row: " | ".join(
+                    signal for signal in self.SCORE_COLUMNS
+                    if row[f"source_{signal}"]
+                ),
+                axis=1,
+            )
+            combined["candidate_source_count"] = combined[source_columns].sum(axis=1)
+            output_columns.extend(["candidate_sources", "candidate_source_count"])
         combined.insert(0, "cart_skus", " | ".join(cart))
         return (combined.sort_values(["recommendation_score", "recommended_sku"],
                                     ascending=[False, True])
-                .head(top_n).reset_index(drop=True)[output_columns])
+                .reset_index(drop=True)[output_columns])
+
+    def recommend(self, cart_skus, top_n=10, metadata_filters=None):
+        """Rank the top products from the independently retrieved pool."""
+        return (self.candidate_pool(cart_skus, top_n, metadata_filters)
+                .head(top_n).reset_index(drop=True))

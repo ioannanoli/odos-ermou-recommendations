@@ -8,6 +8,7 @@ from pathlib import Path
 
 import pandas as pd
 
+from experiments.expanded_candidate_generation import expanded_candidate_configuration
 from src.data_loader import load_orders
 from src.error_analysis import bootstrap_ranking_intervals
 from src.evaluation import evaluate_single_sku_engine, single_sku_queries
@@ -50,7 +51,7 @@ def _ensure_empty_output(output_directory):
 def run_future_evaluation(future_path, history_path=HISTORY_PATH,
                           output_directory=OUTPUT_DIRECTORY, k=10,
                           candidate_k=100, random_state=42,
-                          bootstrap_samples=2000):
+                          bootstrap_samples=2000, include_expanded_v2=False):
     """Fit the locked model on frozen history and evaluate all eligible later orders."""
     manifest = verify_frozen_configuration(
         DEFAULT_CONFIG_PATH, FREEZE_MANIFEST_PATH
@@ -79,8 +80,8 @@ def run_future_evaluation(future_path, history_path=HISTORY_PATH,
             "the periods are not independent."
         )
 
-    model = FinalRecommender.from_config_path(DEFAULT_CONFIG_PATH).fit(history)
-    catalog_skus = set(model.product_catalog.index.astype(str))
+    frozen_model = FinalRecommender.from_config_path(DEFAULT_CONFIG_PATH).fit(history)
+    catalog_skus = set(frozen_model.product_catalog.index.astype(str))
     queries = single_sku_queries(
         future, catalog_skus, max_queries=None, random_state=random_state
     )
@@ -90,20 +91,53 @@ def run_future_evaluation(future_path, history_path=HISTORY_PATH,
             "frozen catalog, so HR@K cannot be evaluated yet."
         )
 
-    summary, outcomes = evaluate_single_sku_engine(
-        model.engine, queries, history, catalog_skus, k, candidate_k
-    )
-    summary.insert(0, "model", "frozen_tfidf_hybrid")
-    summary.insert(1, "split", "strictly_future")
-    intervals = bootstrap_ranking_intervals(
-        outcomes, n_bootstrap=bootstrap_samples, random_state=random_state
-    )
-    segments = outcomes.groupby("popularity_segment").agg(
-        queries=("order_id", "size"),
-        hit_rate_at_k=("hit_at_k", "mean"),
-        mrr_at_k=("reciprocal_rank_at_k", "mean"),
-        candidate_recall=("target_in_candidates", "mean"),
-    ).reset_index().rename(columns={"popularity_segment": "segment"})
+    models = {"frozen_v1": frozen_model}
+    if include_expanded_v2:
+        models["expanded_candidates_v2"] = FinalRecommender(
+            expanded_candidate_configuration()
+        ).fit(history)
+
+    summary_frames = []
+    outcome_frames = []
+    interval_frames = []
+    segment_frames = []
+    for model_name, model in models.items():
+        model_summary, model_outcomes = evaluate_single_sku_engine(
+            model.engine, queries, history, catalog_skus, k, candidate_k
+        )
+        model_summary.insert(0, "model", model_name)
+        model_summary.insert(1, "split", "strictly_future")
+        model_outcomes.insert(0, "model", model_name)
+        model_intervals = bootstrap_ranking_intervals(
+            model_outcomes, n_bootstrap=bootstrap_samples,
+            random_state=random_state,
+        )
+        model_intervals.insert(0, "model", model_name)
+        model_segments = model_outcomes.groupby("popularity_segment").agg(
+            queries=("order_id", "size"),
+            hit_rate_at_k=("hit_at_k", "mean"),
+            mrr_at_k=("reciprocal_rank_at_k", "mean"),
+            candidate_recall=("target_in_candidates", "mean"),
+            candidate_pool_recall=("target_in_retrieved_pool", "mean"),
+        ).reset_index().rename(columns={"popularity_segment": "segment"})
+        model_segments.insert(0, "model", model_name)
+        summary_frames.append(model_summary)
+        outcome_frames.append(model_outcomes)
+        interval_frames.append(model_intervals)
+        segment_frames.append(model_segments)
+    summary = pd.concat(summary_frames, ignore_index=True)
+    outcomes = pd.concat(outcome_frames, ignore_index=True)
+    intervals = pd.concat(interval_frames, ignore_index=True)
+    segments = pd.concat(segment_frames, ignore_index=True)
+
+    paired = None
+    if include_expanded_v2:
+        fixed = outcomes[outcomes["model"] == "frozen_v1"]
+        expanded = outcomes[outcomes["model"] == "expanded_candidates_v2"]
+        paired = fixed[["order_id", "hit_at_k", "target_rank"]].merge(
+            expanded[["order_id", "hit_at_k", "target_rank"]],
+            on="order_id", suffixes=("_v1", "_v2"), validate="one_to_one",
+        )
 
     output_directory = _ensure_empty_output(output_directory)
     summary.to_csv(output_directory / "summary_metrics.csv", index=False,
@@ -114,15 +148,23 @@ def run_future_evaluation(future_path, history_path=HISTORY_PATH,
                      encoding="utf-8-sig")
     segments.to_csv(output_directory / "popularity_segments.csv", index=False,
                     encoding="utf-8-sig")
+    if paired is not None:
+        paired.to_csv(output_directory / "paired_outcomes.csv", index=False,
+                      encoding="utf-8-sig")
     pd.DataFrame(queries).to_csv(output_directory / "queries.csv", index=False,
                                  encoding="utf-8-sig")
     run_record = {
         "protocol": "locked single-SKU future-period evaluation; no tuning",
         "configuration_sha256": manifest["configuration_sha256"],
+        "models": list(models),
+        "expanded_v2_configuration": (
+            models["expanded_candidates_v2"].configuration
+            if include_expanded_v2 else None
+        ),
         "freeze_manifest": str(FREEZE_MANIFEST_PATH),
-        "history_path": str(history_path),
+        "history_path": Path(history_path).name,
         "history_sha256": sha256_file(history_path),
-        "future_path": str(future_path),
+        "future_path": Path(future_path).name,
         "future_sha256": sha256_file(future_path),
         "training_cutoff": str(cutoff),
         "future_period_start": str(pd.to_datetime(future["Order Date"]).min()),
@@ -134,6 +176,7 @@ def run_future_evaluation(future_path, history_path=HISTORY_PATH,
         "random_state": random_state,
         "bootstrap_samples": bootstrap_samples,
         "tuning_performed": False,
+        "expanded_v2_predefined_before_labels": bool(include_expanded_v2),
     }
     (output_directory / "run_configuration.json").write_text(
         json.dumps(run_record, indent=2), encoding="utf-8"
@@ -154,6 +197,10 @@ def parse_args():
     parser.add_argument("--candidate-k", type=int, default=100)
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--bootstrap-samples", type=int, default=2000)
+    parser.add_argument(
+        "--include-expanded-v2", action="store_true",
+        help="Compare the already-defined expanded candidate model on shared queries.",
+    )
     return parser.parse_args()
 
 
@@ -162,6 +209,7 @@ def main():
     run_future_evaluation(
         arguments.future, arguments.history, arguments.output, arguments.k,
         arguments.candidate_k, arguments.seed, arguments.bootstrap_samples,
+        arguments.include_expanded_v2,
     )
 
 
