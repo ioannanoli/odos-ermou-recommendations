@@ -1,0 +1,16 @@
+﻿source_combination,candidate_occurrences
+product2vec,2641538
+text,2287231
+metadata,2252466
+metadata | text,556404
+metadata | product2vec,214765
+product2vec | text,199469
+metadata | product2vec | text,58820
+copurchase | product2vec,5774
+copurchase | metadata | product2vec | text,4495
+copurchase | metadata | product2vec,2847
+copurchase,2043
+copurchase | product2vec | text,792
+copurchase | metadata | text,767
+copurchase | metadata,759
+copurchase | text,205

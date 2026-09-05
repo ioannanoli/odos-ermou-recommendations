@@ -144,7 +144,12 @@ def parse_args():
     return parser.parse_args()
 
 
-if __name__ == "__main__":
+def main():
+    """Console entry point for Phase 4 experiments."""
     arguments = parse_args()
     run_experiments(arguments.data, arguments.output, arguments.trials,
                     arguments.max_queries, arguments.seed)
+
+
+if __name__ == "__main__":
+    main()

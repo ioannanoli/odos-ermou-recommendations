@@ -1,5 +1,7 @@
 networkx
+matplotlib
 numpy
 openpyxl
 pandas
-
+python-docx
+streamlit

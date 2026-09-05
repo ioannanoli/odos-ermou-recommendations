@@ -31,9 +31,11 @@ class Product2VecRecommender:
         self.index_to_sku = {}
         self.embeddings = None
         self.graph = None
+        self.product_catalog = None
+        self._cart_cache = {}
 
     def _next_node(self, previous, current, rng):
-        neighbors = list(self.graph.neighbors(current))
+        neighbors = sorted(self.graph.neighbors(current))
         if not neighbors:
             return None
         weights = []
@@ -57,7 +59,7 @@ class Product2VecRecommender:
         if self.graph is None:
             raise RuntimeError("Fit the model before generating walks.")
         rng = np.random.default_rng(self.random_state)
-        nodes = [node for node in self.graph if self.graph.degree(node) > 0]
+        nodes = sorted(node for node in self.graph if self.graph.degree(node) > 0)
         walks = []
         for _ in range(self.walks_per_node):
             for start in rng.permutation(nodes):
@@ -132,8 +134,13 @@ class Product2VecRecommender:
         norms = np.linalg.norm(embeddings, axis=1, keepdims=True)
         return np.divide(embeddings, norms, out=np.zeros_like(embeddings), where=norms > 0)
 
-    def fit(self, orders, product_catalog=None):
-        self.graph = build_copurchase_graph(orders)
+    def fit(self, orders=None, product_catalog=None, graph=None):
+        """Fit from order lines or from a preconfigured co-purchase graph."""
+        if graph is None and orders is None:
+            raise ValueError("Provide either orders or graph.")
+        self.graph = graph.copy() if graph is not None else build_copurchase_graph(orders)
+        self.product_catalog = product_catalog
+        self._cart_cache.clear()
         skus = sorted(self.graph.nodes)
         self.sku_to_index = {sku: index for index, sku in enumerate(skus)}
         self.index_to_sku = {index: sku for sku, index in self.sku_to_index.items()}
@@ -158,3 +165,39 @@ class Product2VecRecommender:
             if len(rows) == top_n:
                 break
         return pd.DataFrame(rows, columns=columns)
+
+    def recommend_cart(self, cart_skus, top_n=10):
+        """Return exact cosine k-NN recommendations for a multi-product cart."""
+        columns = ["cart_skus", "recommended_sku", "product2vec_score"]
+        if self.embeddings is None:
+            return pd.DataFrame(columns=columns)
+        cart = list(dict.fromkeys(str(sku) for sku in cart_skus))
+        cache_key = (tuple(cart), int(top_n))
+        if cache_key in self._cart_cache:
+            return self._cart_cache[cache_key].copy()
+        known = [sku for sku in cart if sku in self.sku_to_index and self.graph.degree(sku) > 0]
+        if not known:
+            return pd.DataFrame(columns=columns)
+
+        indices = [self.sku_to_index[sku] for sku in known]
+        cart_vector = self.embeddings[indices].mean(axis=0)
+        norm = np.linalg.norm(cart_vector)
+        if norm == 0:
+            return pd.DataFrame(columns=columns)
+        cart_vector /= norm
+        scores = self.embeddings @ cart_vector
+        cart_set = set(cart)
+        rows = []
+        for other_index in np.argsort(scores)[::-1]:
+            other_sku = self.index_to_sku[other_index]
+            if other_sku not in cart_set and self.graph.degree(other_sku) > 0:
+                rows.append({
+                    "cart_skus": " | ".join(cart),
+                    "recommended_sku": other_sku,
+                    "product2vec_score": float(scores[other_index]),
+                })
+            if len(rows) == top_n:
+                break
+        result = pd.DataFrame(rows, columns=columns)
+        self._cart_cache[cache_key] = result
+        return result.copy()

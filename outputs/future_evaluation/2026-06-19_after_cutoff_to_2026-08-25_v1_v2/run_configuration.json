@@ -1,0 +1,88 @@
+{
+  "protocol": "locked single-SKU future-period evaluation; no tuning",
+  "configuration_sha256": "06538205e3e942113aa1d583c0a37f74c8c434ee60bc696f8bb90f2d021578bb",
+  "models": [
+    "frozen_v1",
+    "expanded_candidates_v2"
+  ],
+  "expanded_v2_configuration": {
+    "random_seed": 42,
+    "k": 10,
+    "status_policy": "all",
+    "allowed_statuses": null,
+    "graph": {
+      "weighting": "cosine",
+      "min_pair_count": 1,
+      "half_life_months": 6.0,
+      "ranking": "confidence"
+    },
+    "product2vec": {
+      "n_components": 48,
+      "walk_length": 8,
+      "walks_per_node": 2,
+      "window_size": 3,
+      "negative_samples": 2,
+      "epochs": 2,
+      "learning_rate": 0.05,
+      "p": 1.0,
+      "q": 1.0
+    },
+    "blend_weights": {
+      "copurchase": 0.4,
+      "product2vec": 0.1,
+      "metadata": 0.1,
+      "text": 0.4
+    },
+    "metadata_field_weights": {
+      "\u039a\u03b1\u03c4\u03b7\u03b3\u03bf\u03c1\u03af\u03b5\u03c2 \u03c0\u03c1\u03bf\u03ca\u03cc\u03bd\u03c4\u03c9\u03bd": 0.35,
+      "\u039c\u03ac\u03c1\u03ba\u03b5\u03c2": 0.2,
+      "\u03a0\u03c1\u03bf\u03ca\u03cc\u03bd \u0397\u03bb\u03b9\u03ba\u03af\u03b1": 0.25,
+      "\u03a0\u03c1\u03bf\u03ca\u03cc\u03bd \u0389\u03c1\u03c9\u03b1\u03c2": 0.15,
+      "\u03a0\u03c1\u03bf\u03ca\u03cc\u03bd \u03a6\u03cd\u03bb\u03bb\u03bf": 0.05
+    },
+    "architecture": "heterogeneous",
+    "heterogeneous_relationship_weights": {
+      "copurchase": 1.0,
+      "category": 0.05,
+      "brand": 0.05,
+      "age": 0.05,
+      "hero": 0.05
+    },
+    "tfidf": {
+      "word_weight": 0.6,
+      "char_weight": 0.4,
+      "word_ngram_range": [
+        1,
+        2
+      ],
+      "char_ngram_range": [
+        3,
+        5
+      ]
+    },
+    "model_version": "v2_expanded_candidates_experimental",
+    "candidate_generation": {
+      "minimum_per_source": 500,
+      "multiplier": 30,
+      "maximum_per_source": 3000,
+      "source_limits": {},
+      "track_sources": true
+    }
+  },
+  "freeze_manifest": "outputs\\single_sku_evaluation\\development\\model_freeze_manifest.json",
+  "history_path": "Orders-Export-2026-June-07-2054.xlsx",
+  "history_sha256": "b983e2765fd50ea7e735a1d7b91ff0c0fa42768fb8dd8e0e159d1f995c3e58db",
+  "future_path": "\u03a0\u03b1\u03c1\u03b1\u03b3\u03b3\u03b5\u03bb\u03af\u03b5\u03c2-Export-2026-January-26-2148 (1).csv",
+  "future_sha256": "f8aa3f0ba3df291c59cd57ba637d47cda00edfac64172882e407948ff62249e3",
+  "training_cutoff": "2026-06-19 14:28:25",
+  "future_period_start": "2026-06-19 22:16:17",
+  "future_period_end": "2026-08-25 13:20:29",
+  "future_orders": 287,
+  "eligible_queries": 24,
+  "k": 10,
+  "candidate_k": 100,
+  "random_state": 42,
+  "bootstrap_samples": 2000,
+  "tuning_performed": false,
+  "expanded_v2_predefined_before_labels": true
+}

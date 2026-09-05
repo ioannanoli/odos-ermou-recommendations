@@ -1,0 +1,7 @@
+﻿model,metric,point_estimate,lower_95,upper_95,bootstrap_samples
+frozen_v1,hit_rate_at_k,0.2916666666666667,0.125,0.5,2000
+frozen_v1,recall_at_k,0.2916666666666667,0.125,0.5,2000
+frozen_v1,mrr_at_k,0.225,0.08333333333333333,0.39166666666666666,2000
+expanded_candidates_v2,hit_rate_at_k,0.2916666666666667,0.125,0.5,2000
+expanded_candidates_v2,recall_at_k,0.2916666666666667,0.125,0.5,2000
+expanded_candidates_v2,mrr_at_k,0.22361111111111112,0.08333333333333333,0.3902777777777778,2000

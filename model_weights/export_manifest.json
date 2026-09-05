@@ -1,0 +1,43 @@
+{
+  "schema_version": 1,
+  "model_artifact": "final_recommender.pkl",
+  "model_artifact_sha256": "34d4cb78bdf33fbf22cc7284398e100d3fb138b0a1ee3f4ac5619c3b45d64565",
+  "configuration": "model_configs/final_product_page_model.json",
+  "configuration_sha256": "06538205e3e942113aa1d583c0a37f74c8c434ee60bc696f8bb90f2d021578bb",
+  "training_summary": {
+    "architecture": "heterogeneous",
+    "order_count": 9727,
+    "line_count": 14178,
+    "catalog_skus": 6257,
+    "graph_nodes": 6257,
+    "graph_edges": 8841,
+    "training_start": "2019-04-15 09:32:57",
+    "training_end": "2026-06-19 14:28:25"
+  },
+  "graph": {
+    "nodes": 6257,
+    "edges": 8841,
+    "weighting": "cosine",
+    "ranking": "confidence",
+    "edge_weight_column": "selected_edge_weight"
+  },
+  "node2vec": {
+    "nodes": 7029,
+    "dimensions": 48,
+    "representation": "L2-normalized sum of Skip-Gram input and output vectors"
+  },
+  "files": {
+    "final_graph_nodes.csv": {
+      "rows": 6257,
+      "sha256": "2743a80667bf988b74f5d5a10a817cabc52317daf2716bb68ce0b848dd260f01"
+    },
+    "final_graph_edges.csv": {
+      "rows": 8841,
+      "sha256": "bc1a2775c3ccdfbf7c9d440475afc3386d8d2177c638fc513cc62a68db9eed83"
+    },
+    "final_node2vec_embeddings.csv": {
+      "rows": 7029,
+      "sha256": "91afe37fb5ee1ba997ef40a7631983f599c81949a767c04e8a68acfa23b50636"
+    }
+  }
+}

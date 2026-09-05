@@ -1,0 +1,11 @@
+﻿status,lines
+wc-completed,12290
+wc-cancelled,625
+wc-pickup,481
+wc-refunded,405
+wc-pending,303
+wc-ready-pickup,46
+wc-failed,24
+wc-processing,2
+trash,1
+wc-on-hold,1

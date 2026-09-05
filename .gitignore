@@ -3,9 +3,14 @@ __pycache__/
 .pytest_cache/
 .venv/
 venv/
+build/
+dist/
+*.egg-info/
 .env
 .idea/
 .vscode/
+models/*.pkl
+outputs/serving/
 
 # Raw order exports can contain customer and location information.
 data/*.xlsx

@@ -1,0 +1,7 @@
+﻿model,split,segment_type,segment,queries,hit_rate_at_k,mrr_at_k,mean_candidate_cross_entropy
+selected_final_model,test,popularity,medium,35,0.6285714285714286,0.27998866213151924,8.252984295464996
+selected_final_model,test,popularity,popular,3,0.0,0.0,19.95325427326969
+selected_final_model,test,popularity,rare,37,0.16216216216216217,0.04654654654654655,15.74019537926295
+selected_final_model,test,basket_size,large,6,0.6666666666666666,0.2916666666666667,8.052441941211862
+selected_final_model,test,basket_size,medium,20,0.4,0.09811507936507936,10.203132440500955
+selected_final_model,test,basket_size,small,49,0.32653061224489793,0.15937803692905733,13.851513096663728

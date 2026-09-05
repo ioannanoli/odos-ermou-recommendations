@@ -1,0 +1,2 @@
+﻿k,evaluated_orders,precision_at_k,recall_at_k,hit_rate_at_k,mrr_at_k,mean_candidate_cross_entropy,catalog_coverage_at_k
+10,75,0.029333333333333333,0.29333333333333333,0.29333333333333333,0.11233333333333331,18.5943052340882,0.06829966028964778

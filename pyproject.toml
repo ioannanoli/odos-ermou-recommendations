@@ -1,0 +1,43 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "odos-ermou-recommendations"
+version = "0.1.0"
+description = "Local market-basket, graph, and embedding recommendations for a toy shop"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "matplotlib",
+    "networkx",
+    "numpy",
+    "openpyxl",
+    "pandas",
+    "streamlit",
+]
+
+[project.optional-dependencies]
+report = ["python-docx"]
+
+[project.scripts]
+odos-recommend = "serve_recommendations:main"
+odos-app = "streamlit_app:launch"
+odos-pipeline = "main:main"
+odos-tune = "experiments.phase4_experiments:main"
+odos-analyze = "experiments.phase6_analysis:main"
+odos-metadata-transfer = "experiments.metadata_transfer_experiment:main"
+odos-visualize = "experiments.graph_visualizations:main"
+odos-improve = "experiments.experiment_runner:main"
+odos-improvement-plots = "experiments.visualization:main"
+odos-evaluate-product-page = "experiments.single_sku_evaluation:main"
+odos-evaluate-future = "experiments.future_period_evaluation:main"
+odos-expanded-candidates = "experiments.expanded_candidate_generation:main"
+odos-candidate-health = "experiments.candidate_health_report:main"
+odos-logistic-backtest = "experiments.logistic_ranker_experiment:main"
+
+[tool.setuptools]
+py-modules = ["main", "serve_recommendations", "streamlit_app"]
+
+[tool.setuptools.packages.find]
+include = ["src", "src.*", "experiments", "experiments.*"]

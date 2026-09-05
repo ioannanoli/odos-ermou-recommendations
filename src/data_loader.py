@@ -42,7 +42,12 @@ def load_orders(path, statuses: Iterable[str] | None = None) -> pd.DataFrame:
     By default no order status is discarded, including cancelled and pending
     orders. Pass ``statuses`` to explicitly select an allow-list.
     """
-    df = pd.read_excel(path)
+    suffix = str(path).casefold()
+    if suffix.endswith(".csv"):
+        df = pd.read_csv(path, dtype={"SKU": "string"}, encoding="utf-8-sig",
+                         low_memory=False)
+    else:
+        df = pd.read_excel(path)
     required = {"Order ID", "Order Status", "SKU"}
     missing = required.difference(df.columns)
     if missing:
